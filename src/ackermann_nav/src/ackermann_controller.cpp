@@ -117,7 +117,7 @@ public:
 };
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "ackermann_controller");
+    ros::init(argc, argv, "ackermann_controller2");
     AckermannController controller;
     ros::spin();
     return 0;
