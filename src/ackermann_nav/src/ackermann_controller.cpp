@@ -105,9 +105,9 @@ public:
         y_ += delta_y;
         th_ += delta_th;
 
-        ROS_DEBUG("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
+        ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
                  dt, delta_x, delta_y, delta_th);
-        ROS_DEBUG("Current pose: x=%.3f, y=%.3f, th=%.3f",
+        ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
                  x_, y_, th_);
 
         // Publish tf transform
