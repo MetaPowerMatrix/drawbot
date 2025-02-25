@@ -73,42 +73,34 @@ sudo apt-get install ros-melodic-navigation
 
 ### 4. 克隆必要的ROS包
 ```bash
+# 克隆RPLidar驱动包
 cd ~/ackermann_ws/src
 git clone https://github.com/robopeak/rplidar_ros.git
+
+# 创建导航功能包
+catkin_create_pkg ackermann_nav roscpp rospy std_msgs geometry_msgs nav_msgs ackermann_msgs tf2 tf2_ros
 ```
 
-### 5. 编译工作空间
+### 5. 创建启动文件和配置文件
 ```bash
-# 在编译之前更新ROS依赖
-cd ~/ackermann_ws
-rosdep install --from-paths src --ignore-src -r -y
+# 创建必要的目录
+cd ~/ackermann_ws/src/ackermann_nav
+mkdir -p launch config urdf
 
-# 确保在工作空间根目录下编译
-catkin_make
+# 创建配置文件
+cd config
+touch costmap_common_params.yaml
+touch local_costmap_params.yaml
+touch global_costmap_params.yaml
+touch base_local_planner_params.yaml
+
+# 创建URDF目录和文件
+cd ../urdf
+touch ackermann.urdf.xacro
+
+# 安装额外依赖
+sudo apt-get install ros-melodic-robot-state-publisher ros-melodic-amcl ros-melodic-move-base ros-melodic-map-server
 ```
 
-## 使用说明
-1. 启动RPLidar节点：
-```bash
-roslaunch rplidar_ros rplidar.launch
+### 6. 编译工作空间
 ```
-
-2. 启动导航节点：
-```bash
-roslaunch ackermann_nav navigation.launch
-```
-
-## 文件结构
-```
-.
-├── src/
-│   ├── ackermann_nav/       # 导航功能包
-│   ├── ackermann_msgs/      # 阿克曼消息类型
-│   └── rplidar_ros/         # RPLidar驱动包
-```
-
-## 许可证
-MIT License
-
-## 贡献
-欢迎提交Issue和Pull Request

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- 加载机器人参数 -->
+    <param name="robot_description" command="$(find xacro)/xacro '$(find ackermann_nav)/urdf/ackermann.urdf.xacro'" />
+
+    <!-- 启动RPLidar -->
+    <include file="$(find rplidar_ros)/launch/rplidar.launch" />
+
+    <!-- 启动机器人状态发布节点 -->
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+        <param name="publish_frequency" type="double" value="50.0" />
+    </node>
+
+    <!-- 启动AMCL定位 -->
+    <include file="$(find amcl)/examples/amcl_diff.launch" />
+
+    <!-- 启动move_base导航 -->
+    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+        <rosparam file="$(find ackermann_nav)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+        <rosparam file="$(find ackermann_nav)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find ackermann_nav)/config/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find ackermann_nav)/config/global_costmap_params.yaml" command="load" />
+        <rosparam file="$(find ackermann_nav)/config/base_local_planner_params.yaml" command="load" />
+    </node>
+</launch> 
