@@ -29,18 +29,19 @@ public:
         // 默认参数设置
         target_distance_ = 0.0;
         target_angle_ = 0.0;
-        linear_speed_ = 0.2;
-        angular_speed_ = 0.5;
+        linear_speed_ = 0.2;  // 默认线速度
+        angular_speed_ = 0.5; // 默认角速度
         
         // 创建发布者和订阅者
         cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
     }
     
-    void setTargets(double distance, double angle) {
+    void setTargets(double distance, double angle, double speed) {
         target_distance_ = distance;
         target_angle_ = angle;
-        ROS_INFO("Set targets: distance = %.2f meters, angle = %.2f radians", distance, angle);
+        linear_speed_ = speed;
+        ROS_INFO("Set targets: distance = %.2f meters, angle = %.2f radians, speed = %.2f m/s", distance, angle, speed);
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
@@ -133,17 +134,24 @@ public:
 int main(int argc, char** argv) {
     ros::init(argc, argv, "move_distance");
     
-    if (argc != 3) {
-        ROS_ERROR("Usage: %s <distance(meters)> <angle(radians)>", argv[0]);
+    if (argc != 4) {
+        ROS_ERROR("Usage: %s <distance(meters)> <angle(radians)> <speed(m/s)>", argv[0]);
         return 1;
     }
     
     // 解析命令行参数
     double distance = std::atof(argv[1]);
     double angle = std::atof(argv[2]);
+    double speed = std::atof(argv[3]);
+    
+    // 验证速度参数
+    if (speed <= 0) {
+        ROS_ERROR("Speed must be greater than 0");
+        return 1;
+    }
     
     MoveDistance move_controller;
-    move_controller.setTargets(distance, angle);
+    move_controller.setTargets(distance, angle, speed);
     
     // 等待1秒钟让ROS系统完全初始化
     ros::Duration(1.0).sleep();
