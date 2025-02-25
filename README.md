@@ -103,4 +103,37 @@ sudo apt-get install ros-melodic-robot-state-publisher ros-melodic-amcl ros-melo
 ```
 
 ### 6. 编译工作空间
+```bash
+# 在编译之前更新ROS依赖
+cd ~/ackermann_ws
+rosdep install --from-paths src --ignore-src -r -y
+
+# 确保在工作空间根目录下编译
+catkin_make
 ```
+
+## 使用说明
+1. 启动RPLidar节点：
+```bash
+roslaunch rplidar_ros rplidar.launch
+```
+
+2. 启动导航节点：
+```bash
+roslaunch ackermann_nav navigation.launch
+```
+
+## 文件结构
+```
+.
+├── src/
+│   ├── ackermann_nav/       # 导航功能包
+│   ├── ackermann_msgs/      # 阿克曼消息类型
+│   └── rplidar_ros/         # RPLidar驱动包
+```
+
+## 许可证
+MIT License
+
+## 贡献
+欢迎提交Issue和Pull Request
