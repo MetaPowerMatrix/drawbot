@@ -40,13 +40,13 @@ public:
     void setTargets(double distance, double angle) {
         target_distance_ = distance;
         target_angle_ = angle;
-        ROS_INFO("设置目标：距离 = %.2f 米, 角度 = %.2f 弧度", distance, angle);
+        ROS_INFO("Set targets: distance = %.2f meters, angle = %.2f radians", distance, angle);
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
         // 检查里程计消息的有效性
         if (!msg) {
-            ROS_WARN("receive empty odom message");
+            ROS_WARN("Received empty odom message");
             return;
         }
 
@@ -56,7 +56,7 @@ public:
             start_y_ = msg->pose.pose.position.y;
             start_th_ = tf::getYaw(msg->pose.pose.orientation);
             movement_started_ = true;
-            ROS_INFO("开始移动，初始位置: (%.2f, %.2f), 朝向: %.2f", start_x_, start_y_, start_th_);
+            ROS_INFO("Starting movement, initial position: (%.2f, %.2f), heading: %.2f", start_x_, start_y_, start_th_);
         }
         
         // 获取当前朝向
@@ -71,7 +71,7 @@ public:
             // 先完成转向
             if (fabs(angle_diff - target_angle_) < 0.05) {
                 angle_finished_ = true;
-                ROS_INFO("完成转向: %.2f 弧度", angle_diff);
+                ROS_INFO("Rotation completed: %.2f radians", angle_diff);
             } else {
                 // 继续转向
                 move(true, angle_diff);
@@ -85,7 +85,7 @@ public:
         double distance_moved = std::sqrt(dx*dx + dy*dy);
         
         // 输出调试信息
-        ROS_DEBUG("当前位置: (%.2f, %.2f), 已移动: %.2f 米",
+        ROS_DEBUG("Current position: (%.2f, %.2f), distance moved: %.2f meters",
                  msg->pose.pose.position.x,
                  msg->pose.pose.position.y,
                  distance_moved);
@@ -94,11 +94,11 @@ public:
         if (distance_moved >= target_distance_) {
             stop();
             goal_reached_ = true;
-            ROS_INFO("完成移动: %.2f 米", distance_moved);
+            ROS_INFO("Movement completed: %.2f meters", distance_moved);
         } else if (!goal_reached_) {
             // 继续移动
             move(false, angle_diff);
-            ROS_DEBUG("继续移动，目标: %.2f 米，当前: %.2f 米",
+            ROS_DEBUG("Continuing movement, target: %.2f meters, current: %.2f meters",
                      target_distance_, distance_moved);
         }
     }
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "move_distance");
     
     if (argc != 3) {
-        ROS_ERROR("用法: %s <距离(米)> <角度(弧度)>", argv[0]);
+        ROS_ERROR("Usage: %s <distance(meters)> <angle(radians)>", argv[0]);
         return 1;
     }
     
