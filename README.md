@@ -30,6 +30,9 @@ sudo apt update
 # 安装ROS完整版
 sudo apt install ros-melodic-desktop-full
 
+# 安装rosdep工具
+sudo apt install python-rosdep
+
 # 初始化rosdep
 sudo rosdep init
 rosdep update
@@ -38,25 +41,49 @@ rosdep update
 echo "source /opt/ros/melodic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 
-# 安装常用工具
+# 安装其他常用工具
 sudo apt install python-rosinstall python-rosinstall-generator python-wstool build-essential
 ```
 
 ### 2. 创建工作空间
 ```bash
+# 创建工作空间目录
 mkdir -p ~/ackermann_ws/src
 cd ~/ackermann_ws/src
 catkin_init_workspace
+
+# 返回工作空间根目录
+cd ~/ackermann_ws
+# 首次初始化工作空间
+catkin_make
+
+# 设置工作空间环境变量
+echo "source ~/ackermann_ws/devel/setup.bash" >> ~/.bashrc
+source ~/.bashrc
 ```
 
-3. 克隆必要的ROS包：
+### 3. 安装依赖包
 ```bash
+# 安装ackermann_msgs包
+sudo apt-get install ros-melodic-ackermann-msgs
+
+# 安装导航相关包
+sudo apt-get install ros-melodic-navigation
+```
+
+### 4. 克隆必要的ROS包
+```bash
+cd ~/ackermann_ws/src
 git clone https://github.com/robopeak/rplidar_ros.git
 ```
 
-4. 编译工作空间：
+### 5. 编译工作空间
 ```bash
+# 在编译之前更新ROS依赖
 cd ~/ackermann_ws
+rosdep install --from-paths src --ignore-src -r -y
+
+# 确保在工作空间根目录下编译
 catkin_make
 ```
 
