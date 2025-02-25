@@ -34,7 +34,7 @@ public:
     void pathCallback(const nav_msgs::Path::ConstPtr& path) {
         current_path_ = *path;
         has_path_ = true;
-        ROS_INFO("接收到新的路径，包含 %lu 个路点", path->poses.size());
+        ROS_INFO("Received new path with %lu waypoints", path->poses.size());
     }
 
     bool getTransform(tf::StampedTransform& transform) {
@@ -137,7 +137,7 @@ public:
         cmd_vel.angular.z = std::min(std::max(angle_diff, -max_angular_speed_),
                                    max_angular_speed_);
         
-        ROS_DEBUG("路径跟随状态：距离=%.2f, 角度差=%.2f, 线速度=%.2f, 角速度=%.2f",
+        ROS_DEBUG("Path following status: distance=%.2f, angle_diff=%.2f, linear_speed=%.2f, angular_speed=%.2f",
                   distance, angle_diff, cmd_vel.linear.x, cmd_vel.angular.z);
 
         // 检查是否到达终点
@@ -146,7 +146,7 @@ public:
             cmd_vel.linear.x = 0;
             cmd_vel.angular.z = 0;
             has_path_ = false;
-            ROS_INFO("到达目标点");
+            ROS_INFO("Goal reached");
         }
 
         cmd_vel_pub_.publish(cmd_vel);

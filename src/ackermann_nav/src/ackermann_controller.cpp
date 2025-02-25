@@ -28,6 +28,9 @@ public:
         nh_.param<double>("max_steering_angle", max_steering_angle_, 0.6);
         nh_.param<double>("max_speed", max_speed_, 1.0);
 
+        ROS_INFO("Ackermann controller initialized with parameters: wheelbase=%.3f, max_steering_angle=%.3f, max_speed=%.3f",
+                 wheelbase_, max_steering_angle_, max_speed_);
+
         ackermann_cmd_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
             "ackermann_cmd", 10);
         cmd_vel_sub_ = nh_.subscribe("cmd_vel", 10,
@@ -36,40 +39,51 @@ public:
 
         last_time_ = ros::Time::now();
         
-        // 添加定时器，每50ms更新一次里程计
+        // Add timer to update odometry every 50ms
         update_timer_ = nh_.createTimer(ros::Duration(0.05),
             &AckermannController::timerCallback, this);
+        ROS_INFO("Ackermann controller initialization completed");
     }
 
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
-        // 将Twist消息转换为Ackermann转向命令
+        ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
+
+        // Convert Twist message to Ackermann steering command
         ackermann_msgs::AckermannDriveStamped ackermann_cmd;
         ackermann_cmd.header.stamp = ros::Time::now();
         ackermann_cmd.header.frame_id = "base_link";
 
-        // 限制线速度在最大速度范围内
+        // Limit linear velocity within maximum speed range
         double v = std::min(std::max(msg->linear.x, -max_speed_), max_speed_);
+        ROS_DEBUG("Limited linear velocity: %.3f", v);
         
-        // 计算转向角度
+        // Calculate steering angle
         double steering_angle = 0.0;
-        if (fabs(v) > 0.001 && fabs(msg->angular.z) > 0.001) {  // 避免除以零
+        if (fabs(v) > 0.001 && fabs(msg->angular.z) > 0.001) {  // Avoid division by zero
             double radius = v / msg->angular.z;
             steering_angle = atan(wheelbase_ / radius);
-            ROS_DEBUG("计算转向角度：速度=%.2f, 角速度=%.2f, 转向角=%.2f", v, msg->angular.z, steering_angle);
+            ROS_INFO("Steering calculation: velocity=%.3f, angular=%.3f, turn_radius=%.3f, steering_angle=%.3f",
+                     v, msg->angular.z, radius, steering_angle);
         } else {
-            ROS_DEBUG("速度或角速度太小，保持直线行驶");
+            ROS_INFO("Velocity or angular velocity too small, maintaining straight path: velocity=%.3f, angular=%.3f",
+                     v, msg->angular.z);
         }
         
-        // 限制转向角度在最大范围内
+        // Limit steering angle within maximum range
+        double original_angle = steering_angle;
         steering_angle = std::min(std::max(steering_angle, -max_steering_angle_),
                                 max_steering_angle_);
+        if (fabs(original_angle - steering_angle) > 0.001) {
+            ROS_WARN("Steering angle exceeds limit: original=%.3f, limited=%.3f",
+                     original_angle, steering_angle);
+        }
 
         ackermann_cmd.drive.steering_angle = steering_angle;
         ackermann_cmd.drive.speed = v;
 
         ackermann_cmd_pub_.publish(ackermann_cmd);
         
-        // 保存当前速度和转向角度
+        // Save current velocity and steering angle
         last_v_ = v;
         last_steering_angle_ = steering_angle;
     }
@@ -82,7 +96,7 @@ public:
         ros::Time current_time = ros::Time::now();
         double dt = (current_time - last_time_).toSec();
 
-        // 更新机器人位姿
+        // Update robot pose
         double delta_x = v * cos(th_) * dt;
         double delta_y = v * sin(th_) * dt;
         double delta_th = v * tan(steering_angle) / wheelbase_ * dt;
@@ -91,7 +105,12 @@ public:
         y_ += delta_y;
         th_ += delta_th;
 
-        // 发布tf变换
+        ROS_DEBUG("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
+                 dt, delta_x, delta_y, delta_th);
+        ROS_DEBUG("Current pose: x=%.3f, y=%.3f, th=%.3f",
+                 x_, y_, th_);
+
+        // Publish tf transform
         geometry_msgs::TransformStamped odom_trans;
         odom_trans.header.stamp = current_time;
         odom_trans.header.frame_id = "odom";
@@ -102,7 +121,7 @@ public:
         odom_trans.transform.rotation = tf::createQuaternionMsgFromYaw(th_);
         odom_broadcaster_.sendTransform(odom_trans);
 
-        // 发布里程计消息
+        // Publish odometry message
         nav_msgs::Odometry odom;
         odom.header.stamp = current_time;
         odom.header.frame_id = "odom";
@@ -120,8 +139,20 @@ public:
 };
 
 int main(int argc, char** argv) {
+    ROS_INFO("Starting Ackermann controller node...");
     ros::init(argc, argv, "ackermann_controller");
-    AckermannController controller;
-    ros::spin();
+    ROS_INFO("ROS node initialization completed, node name: %s", ros::this_node::getName().c_str());
+
+    try {
+        ROS_INFO("Creating Ackermann controller instance...");
+        AckermannController controller;
+        ROS_INFO("Ackermann controller instance created successfully, starting main loop");
+        ros::spin();
+        ROS_INFO("Ackermann controller node exited normally");
+    } catch (const std::exception& e) {
+        ROS_ERROR("Ackermann controller error: %s", e.what());
+        return 1;
+    }
+
     return 0;
 }

@@ -1,23 +1,23 @@
 <?xml version="1.0"?>
 <launch>
-    <!-- 加载机器人参数 -->
+    <!-- Load robot parameters -->
     <param name="robot_description" command="$(find xacro)/xacro '$(find ackermann_nav)/urdf/ackermann.urdf.xacro'" />
 
-    <!-- 启动RPLidar -->
+    <!-- Start RPLidar -->
     <include file="$(find rplidar_ros)/launch/rplidar.launch" />
 
-    <!-- 启动机器人状态发布节点 -->
+    <!-- Start robot state publisher node -->
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
         <param name="publish_frequency" type="double" value="50.0" />
     </node>
 
-    <!-- 加载地图文件 -->
+    <!-- Load map file -->
     <node name="map_server" pkg="map_server" type="map_server" args="$(find ackermann_nav)/maps/map.yaml" />
 
-    <!-- 启动AMCL定位 -->
+    <!-- Start AMCL localization -->
     <include file="$(find amcl)/examples/amcl_diff.launch" />
 
-    <!-- 启动move_base导航 -->
+    <!-- Start move_base navigation -->
     <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
         <rosparam file="$(find ackermann_nav)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
         <rosparam file="$(find ackermann_nav)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
@@ -26,7 +26,7 @@
         <rosparam file="$(find ackermann_nav)/config/base_local_planner_params.yaml" command="load" />
     </node>
 
-    <!-- 启动Ackermann控制器 -->
+    <!-- Start Ackermann controller -->
     <node pkg="ackermann_nav" type="ackermann_controller" name="ackermann_controller" output="screen">
         <param name="wheelbase" value="0.25" />
         <param name="max_steering_angle" value="0.6" />
