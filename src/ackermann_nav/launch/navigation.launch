@@ -30,6 +30,6 @@
     <node pkg="ackermann_nav" type="ackermann_controller" name="ackermann_controller" output="screen">
         <param name="wheelbase" value="0.25" />
         <param name="max_steering_angle" value="0.6" />
-        <param name="max_speed" value="1.0" />
+        <param name="max_speed" value="5.0" />
     </node>
 </launch>
