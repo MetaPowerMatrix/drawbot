@@ -52,9 +52,12 @@ public:
         
         // 计算转向角度
         double steering_angle = 0.0;
-        if (fabs(v) > 0.001) {  // 避免除以零
+        if (fabs(v) > 0.001 && fabs(msg->angular.z) > 0.001) {  // 避免除以零
             double radius = v / msg->angular.z;
             steering_angle = atan(wheelbase_ / radius);
+            ROS_DEBUG("计算转向角度：速度=%.2f, 角速度=%.2f, 转向角=%.2f", v, msg->angular.z, steering_angle);
+        } else {
+            ROS_DEBUG("速度或角速度太小，保持直线行驶");
         }
         
         // 限制转向角度在最大范围内

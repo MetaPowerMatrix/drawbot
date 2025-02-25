@@ -125,10 +125,20 @@ public:
 
         // 生成速度命令
         geometry_msgs::Twist cmd_vel;
-        cmd_vel.linear.x = std::min(max_linear_speed_ * (distance / lookahead_distance_),
-                                  max_linear_speed_);
+        
+        // 根据距离和角度差计算线速度和角速度
+        double desired_linear_speed = max_linear_speed_ * (distance / lookahead_distance_);
+        // 当角度差较大时，降低线速度以确保转弯平稳
+        if (fabs(angle_diff) > M_PI/4) {
+            desired_linear_speed *= 0.5;
+        }
+        
+        cmd_vel.linear.x = std::min(desired_linear_speed, max_linear_speed_);
         cmd_vel.angular.z = std::min(std::max(angle_diff, -max_angular_speed_),
                                    max_angular_speed_);
+        
+        ROS_DEBUG("路径跟随状态：距离=%.2f, 角度差=%.2f, 线速度=%.2f, 角速度=%.2f",
+                  distance, angle_diff, cmd_vel.linear.x, cmd_vel.angular.z);
 
         // 检查是否到达终点
         if (distance < goal_tolerance_ &&
