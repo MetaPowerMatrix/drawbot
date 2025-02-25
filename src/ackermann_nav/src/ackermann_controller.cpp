@@ -48,6 +48,15 @@ public:
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
         ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
 
+        static ros::Time last_cmd_time = ros::Time::now();
+        ros::Time current_cmd_time = ros::Time::now();
+        double cmd_interval = (current_cmd_time - last_cmd_time).toSec();
+        if (cmd_interval > 0.001) {
+            ROS_DEBUG("Command processing interval: %.3f seconds (%.2f Hz)", 
+                     cmd_interval, 1.0/cmd_interval);
+        }
+        last_cmd_time = current_cmd_time;
+
         // Convert Twist message to Ackermann steering command
         ackermann_msgs::AckermannDriveStamped ackermann_cmd;
         ackermann_cmd.header.stamp = ros::Time::now();
