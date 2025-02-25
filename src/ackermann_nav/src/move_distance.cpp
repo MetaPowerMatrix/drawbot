@@ -32,7 +32,7 @@ public:
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
         // 检查里程计消息的有效性
         if (!msg) {
-            ROS_WARN("收到空的里程计消息");
+            ROS_WARN("receive empty odom message");
             return;
         }
 
@@ -41,7 +41,7 @@ public:
             start_x_ = msg->pose.pose.position.x;
             start_y_ = msg->pose.pose.position.y;
             movement_started_ = true;
-            ROS_INFO("开始移动，起始位置: (%.2f, %.2f)", start_x_, start_y_);
+            ROS_INFO("start moving, init pos: (%.2f, %.2f)", start_x_, start_y_);
         }
         
         // 计算已移动的距离
@@ -50,7 +50,7 @@ public:
         double distance_moved = std::sqrt(dx*dx + dy*dy);
         
         // 输出调试信息
-        ROS_DEBUG("当前位置: (%.2f, %.2f), 已移动距离: %.2f 米",
+        ROS_DEBUG("current pos: (%.2f, %.2f), moved: %.2f m",
                  msg->pose.pose.position.x,
                  msg->pose.pose.position.y,
                  distance_moved);
@@ -59,11 +59,11 @@ public:
         if (distance_moved >= target_distance_) {
             stop();
             goal_reached_ = true;
-            ROS_INFO("目标距离已达到: %.2f 米", distance_moved);
+            ROS_INFO("finished: %.2f m", distance_moved);
         } else if (!goal_reached_) {
             // 继续移动
             move();
-            ROS_DEBUG("继续移动，目标距离: %.2f 米，当前距离: %.2f 米",
+            ROS_DEBUG("keep moving, target is: %.2f m，current is: %.2f m",
                      target_distance_, distance_moved);
         }
     }
