@@ -35,9 +35,13 @@ target_link_libraries(ackermann_controller ${catkin_LIBRARIES})
 add_executable(path_follower src/path_follower.cpp)
 target_link_libraries(path_follower ${catkin_LIBRARIES})
 
+add_executable(move_20cm_client src/move_20cm_client.cpp)
+target_link_libraries(move_20cm_client ${catkin_LIBRARIES})
+
 install(TARGETS
   ackermann_controller
   path_follower
+  move_20cm_client
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
