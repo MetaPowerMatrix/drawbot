@@ -18,9 +18,12 @@ private:
     double max_speed_;
     double x_, y_, th_;
     ros::Time last_time_;
+    ros::Timer update_timer_;
+    double last_v_;
+    double last_steering_angle_;
 
 public:
-    AckermannController() : x_(0.0), y_(0.0), th_(0.0) {
+    AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0) {
         nh_.param<double>("wheelbase", wheelbase_, 0.25);
         nh_.param<double>("max_steering_angle", max_steering_angle_, 0.6);
         nh_.param<double>("max_speed", max_speed_, 1.0);
@@ -32,6 +35,10 @@ public:
         odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 50);
 
         last_time_ = ros::Time::now();
+        
+        // 添加定时器，每50ms更新一次里程计
+        update_timer_ = nh_.createTimer(ros::Duration(0.05),
+            &AckermannController::timerCallback, this);
     }
 
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
@@ -59,8 +66,13 @@ public:
 
         ackermann_cmd_pub_.publish(ackermann_cmd);
         
-        // 更新里程计
-        updateOdometry(v, steering_angle);
+        // 保存当前速度和转向角度
+        last_v_ = v;
+        last_steering_angle_ = steering_angle;
+    }
+
+    void timerCallback(const ros::TimerEvent&) {
+        updateOdometry(last_v_, last_steering_angle_);
     }
 
     void updateOdometry(double v, double steering_angle) {

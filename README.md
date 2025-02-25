@@ -100,6 +100,7 @@ touch ackermann.urdf.xacro
 
 # 安装额外依赖
 sudo apt-get install ros-melodic-robot-state-publisher ros-melodic-amcl ros-melodic-move-base ros-melodic-map-server
+sudo apt-get install ros-melodic-gmapping
 ```
 
 ### 6. 编译工作空间
