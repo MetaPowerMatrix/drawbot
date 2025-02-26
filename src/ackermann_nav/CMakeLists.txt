@@ -38,10 +38,14 @@ target_link_libraries(path_follower ${catkin_LIBRARIES})
 add_executable(move_distance src/move_distance.cpp)
 target_link_libraries(move_distance ${catkin_LIBRARIES})
 
+add_executable(motor_test src/motor_test.cpp)
+target_link_libraries(motor_test ${catkin_LIBRARIES})
+
 install(TARGETS
   ackermann_controller
   path_follower
   move_distance
+  motor_test
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
