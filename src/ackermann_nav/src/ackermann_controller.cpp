@@ -122,7 +122,7 @@ public:
             cmd_log_counter_ = 0;
         }
 
-        ROS_INFO_THROTTLE(1.0, "发布Ackermann命令: 速度=%.3f, 转向角=%.3f", 
+        ROS_INFO_THROTTLE(1.0, "Publishing Ackermann command: speed=%.3f, steering_angle=%.3f", 
                          ackermann_cmd.drive.speed, ackermann_cmd.drive.steering_angle);
     }
 
