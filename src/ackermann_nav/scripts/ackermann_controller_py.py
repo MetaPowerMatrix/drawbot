@@ -11,7 +11,7 @@ class AckermannController:
         rospy.init_node('ackermann_controller', anonymous=True)
         
         # 串口配置（根据你的控制板调整端口和波特率）
-        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+        self.serial_port = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
         
         # 订阅/cmd_vel话题
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
