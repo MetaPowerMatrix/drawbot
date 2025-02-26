@@ -22,6 +22,12 @@ private:
     double last_v_;
     double last_steering_angle_;
 
+    // Log control variables
+    int cmd_log_counter_ = 0;
+    int odom_log_counter_ = 0;
+    const int CMD_LOG_INTERVAL = 50;   // Print command logs every 50 iterations
+    const int ODOM_LOG_INTERVAL = 100; // Print odometry logs every 100 iterations
+
 public:
     AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0) {
         nh_.param<double>("wheelbase", wheelbase_, 0.25);
@@ -46,12 +52,20 @@ public:
     }
 
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
-        ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
+        // Increment counter
+        cmd_log_counter_++;
+        
+        // Only print detailed logs at specified intervals
+        bool should_log = (cmd_log_counter_ % CMD_LOG_INTERVAL == 0);
+        
+        if (should_log) {
+            ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
+        }
 
         static ros::Time last_cmd_time = ros::Time::now();
         ros::Time current_cmd_time = ros::Time::now();
         double cmd_interval = (current_cmd_time - last_cmd_time).toSec();
-        if (cmd_interval > 0.001) {
+        if (cmd_interval > 0.001 && should_log) {
             ROS_DEBUG("Command processing interval: %.3f seconds (%.2f Hz)", 
                      cmd_interval, 1.0/cmd_interval);
         }
@@ -64,16 +78,20 @@ public:
 
         // Limit linear velocity within maximum speed range
         double v = std::min(std::max(msg->linear.x, -max_speed_), max_speed_);
-        ROS_DEBUG("Limited linear velocity: %.3f", v);
+        if (should_log) {
+            ROS_DEBUG("Limited linear velocity: %.3f", v);
+        }
         
         // Calculate steering angle
         double steering_angle = 0.0;
         if (fabs(v) > 0.001 && fabs(msg->angular.z) > 0.001) {  // Avoid division by zero
             double radius = v / msg->angular.z;
             steering_angle = atan(wheelbase_ / radius);
-            ROS_INFO("Steering calculation: velocity=%.3f, angular=%.3f, turn_radius=%.3f, steering_angle=%.3f",
-                     v, msg->angular.z, radius, steering_angle);
-        } else {
+            if (should_log) {
+                ROS_INFO("Steering calculation: velocity=%.3f, angular=%.3f, turn_radius=%.3f, steering_angle=%.3f",
+                         v, msg->angular.z, radius, steering_angle);
+            }
+        } else if (should_log) {
             ROS_INFO("Velocity or angular velocity too small, maintaining straight path: velocity=%.3f, angular=%.3f",
                      v, msg->angular.z);
         }
@@ -82,7 +100,7 @@ public:
         double original_angle = steering_angle;
         steering_angle = std::min(std::max(steering_angle, -max_steering_angle_),
                                 max_steering_angle_);
-        if (fabs(original_angle - steering_angle) > 0.001) {
+        if (fabs(original_angle - steering_angle) > 0.001 && should_log) {
             ROS_WARN("Steering angle exceeds limit: original=%.3f, limited=%.3f",
                      original_angle, steering_angle);
         }
@@ -95,6 +113,11 @@ public:
         // Save current velocity and steering angle
         last_v_ = v;
         last_steering_angle_ = steering_angle;
+
+        // Prevent counter overflow
+        if (cmd_log_counter_ > 10000) {
+            cmd_log_counter_ = 0;
+        }
     }
 
     void timerCallback(const ros::TimerEvent&) {
@@ -102,6 +125,12 @@ public:
     }
 
     void updateOdometry(double v, double steering_angle) {
+        // Increment counter
+        odom_log_counter_++;
+        
+        // Only print detailed logs at specified intervals
+        bool should_log = (odom_log_counter_ % ODOM_LOG_INTERVAL == 0);
+        
         ros::Time current_time = ros::Time::now();
         double dt = (current_time - last_time_).toSec();
 
@@ -114,10 +143,12 @@ public:
         y_ += delta_y;
         th_ += delta_th;
 
-        ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
-                 dt, delta_x, delta_y, delta_th);
-        ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
-                 x_, y_, th_);
+        if (should_log) {
+            ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
+                     dt, delta_x, delta_y, delta_th);
+            ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
+                     x_, y_, th_);
+        }
 
         // Publish tf transform
         geometry_msgs::TransformStamped odom_trans;
@@ -144,6 +175,11 @@ public:
         odom_pub_.publish(odom);
 
         last_time_ = current_time;
+        
+        // Prevent counter overflow
+        if (odom_log_counter_ > 10000) {
+            odom_log_counter_ = 0;
+        }
     }
 };
 
