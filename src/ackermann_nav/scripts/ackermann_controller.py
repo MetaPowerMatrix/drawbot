@@ -63,8 +63,15 @@ class AckermannController:
         try:
             self.serial_port.write(command.encode('utf-8'))
             print "Sent to controller: %s" % command.strip()
+            # 读取响应（如果控制板会返回数据）
+            response = self.serial_port.readline()
+            if response:
+                print "Controller response: %s" % response.strip()
+            else:
+                print "No response from controller."
         except serial.SerialException as e:
             print "Serial write error: %s" % e
+
 
     def run(self):
         try:
