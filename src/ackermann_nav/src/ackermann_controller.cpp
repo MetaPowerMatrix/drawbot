@@ -4,6 +4,9 @@
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <cmath>
+#include <XmlRpcValue.h>
+#include <string>
+#include <cstdio>
 
 class AckermannController {
 private:
@@ -121,16 +124,6 @@ public:
 
         ROS_INFO_THROTTLE(1.0, "发布Ackermann命令: 速度=%.3f, 转向角=%.3f", 
                          ackermann_cmd.drive.speed, ackermann_cmd.drive.steering_angle);
-
-        // 检查是否有其他节点覆盖了命令
-        ros::master::V_TopicInfo topic_info;
-        ros::master::getTopics(topic_info);
-        for (auto& topic : topic_info) {
-            if (topic.name == "ackermann_cmd") {
-                ROS_INFO_THROTTLE(5.0, "ackermann_cmd话题有%d个发布者", topic.num_publishers);
-                break;
-            }
-        }
     }
 
     void timerCallback(const ros::TimerEvent&) {
