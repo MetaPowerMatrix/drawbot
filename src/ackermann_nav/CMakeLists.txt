@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   tf
   ackermann_msgs
+  serial
 )
 
 catkin_package(
@@ -41,11 +42,15 @@ target_link_libraries(move_distance ${catkin_LIBRARIES})
 add_executable(motor_test src/motor_test.cpp)
 target_link_libraries(motor_test ${catkin_LIBRARIES})
 
+add_executable(arduino_interface src/arduino_interface.cpp)
+target_link_libraries(arduino_interface ${catkin_LIBRARIES})
+
 install(TARGETS
   ackermann_controller
   path_follower
   move_distance
   motor_test
+  arduino_interface
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
