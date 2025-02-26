@@ -11,7 +11,6 @@ except ImportError:
 
 import serial
 import time
-import threading
 
 class AckermannController:
     def __init__(self):
@@ -22,19 +21,11 @@ class AckermannController:
         print "ROS Master is reachable."
 
         print "Initializing ROS node..."
-        def init_node_with_timeout():
-            try:
-                rospy.init_node('ackermann_controller', anonymous=True, log_level=rospy.DEBUG)
-                rospy.logdebug("Debug: Node initialized")
-                print "ROS node initialized."
-            except rospy.ROSException as e:
-                print "ROS init failed: %s" % e
-
-        init_thread = threading.Thread(target=init_node_with_timeout)
-        init_thread.start()
-        init_thread.join(timeout=5)
-        if init_thread.is_alive():
-            print "ROS node initialization timed out."
+        try:
+            rospy.init_node('ackermann_controller', anonymous=True, log_level=rospy.DEBUG)
+            print "ROS node initialized."
+        except rospy.ROSException as e:
+            print "ROS init failed: %s" % e
             sys.exit(1)
 
         try:
