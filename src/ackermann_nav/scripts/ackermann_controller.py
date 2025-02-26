@@ -29,7 +29,7 @@ class AckermannController:
             sys.exit(1)
 
         try:
-            self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+            self.serial_port = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
         except serial.SerialException as e:
             print "Failed to open serial port: %s" % e
             sys.exit(1)
