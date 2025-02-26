@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="ackermann_nav" type="fan_control.py" name="fan_controller" output="screen">
+        <!-- 可以在这里添加参数 -->
+    </node>
+</launch> 
