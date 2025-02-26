@@ -64,10 +64,13 @@ source ~/.bashrc
 
 ### 3. 安装依赖包
 ```bash
-# 安装ackermann_msgs包
-sudo apt-get install ros-melodic-ackermann-msgs
+# 安装Python依赖
+sudo apt-get install python-pip
+sudo pip install pyyaml
+sudo pip install rospkg empy catkin_pkg
 
-# 安装导航相关包
+# 安装ROS依赖包
+sudo apt-get install ros-melodic-ackermann-msgs
 sudo apt-get install ros-melodic-navigation
 ```
 
