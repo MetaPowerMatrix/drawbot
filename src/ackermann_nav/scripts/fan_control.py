@@ -76,6 +76,7 @@ if __name__ == '__main__':
         os.system('sudo chmod 666 /sys/devices/pwm-fan/target_pwm')
         
         controller = FanController()
+        rospy.loginfo(f"start fan control")
         controller.control_fan()
     except rospy.ROSInterruptException:
         pass
