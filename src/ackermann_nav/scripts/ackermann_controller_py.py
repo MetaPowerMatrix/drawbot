@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import sys
+import os
+
 # 如果你用的是ROS Noetic，确保安装了python3-rospy
 try:
     import rospy
