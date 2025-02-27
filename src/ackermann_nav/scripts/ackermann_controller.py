@@ -43,11 +43,11 @@ class AckermannController:
         self.max_speed = 1.0  # m/s
         self.max_steer = 0.5  # rad/s
         print "Ackermann Controller Initialized (Model C30D)"
+        self.is_shutting_down = False  # Initialize here to ensure availability
         self.start_monitoring()
 
         # Register signal handler for Ctrl+C
         signal.signal(signal.SIGINT, self.signal_handler)
-        self.is_shutting_down = False  # Flag to indicate shutdown
 
     def check_ros_master(self):
         import socket
@@ -184,7 +184,7 @@ class AckermannController:
             # self.serial_port.write(dynamic_frame)
             # print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])
 
-            # Check and parse response after sending
+            # Check and parse response after sending (synchronous)
             time.sleep(0.1)  # Small delay to allow response
             response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
             if response and len(response) == 24:
@@ -233,7 +233,7 @@ class AckermannController:
                         if attempt == 2:
                             print "Failed to send stop command after 3 attempts."
 
-                # Check and parse response after sending stop command
+                # Check and parse response after sending stop command (synchronous)
                 time.sleep(0.1)  # Small delay to allow response
                 response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
                 if response and len(response) == 24:
