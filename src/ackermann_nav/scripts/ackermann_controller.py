@@ -190,17 +190,8 @@ class AckermannController:
         try:
             self.serial_port.write(dynamic_frame)
             print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])  # Use dynamic_frame directly
-
-            # Check and parse response after sending (synchronous)
-            time.sleep(0.1)  # Small delay to allow response
-            response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
-            if response and len(response) == 24:
-                print "Controller sync response (raw):", ' '.join(['%02x' % b for b in [ord(c) for c in response]])
-                self.parse_uplink_frame(response)
-            else:
-                print "No sync response or incomplete response from controller."
         except serial.SerialException as e:
-            print "Serial write or read error: %s" % e
+            print "Serial write error: %s" % e
 
     def signal_handler(self, signal, frame):
         print "\nReceived Ctrl+C, shutting down..."
@@ -239,15 +230,6 @@ class AckermannController:
                         print "Serial write error (attempt %d): %s" % (attempt + 1, e)
                         if attempt == 2:
                             print "Failed to send stop command after 3 attempts."
-
-                # Check and parse response after sending stop command (synchronous)
-                time.sleep(0.1)  # Small delay to allow response
-                response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
-                if response and len(response) == 24:
-                    print "Controller sync response after stop (raw):", ' '.join(['%02x' % b for b in [ord(c) for c in response]])
-                    self.parse_uplink_frame(response)
-                else:
-                    print "No sync response or incomplete response from controller after stop."
 
                 self.serial_port.close()
                 print "Controller stopped and serial port closed."

@@ -221,7 +221,7 @@ public:
         bool should_log = (cmd_log_counter_ % CMD_LOG_INTERVAL == 0);
         
         if (should_log) {
-            ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
+        ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
         }
 
         static ros::Time last_cmd_time = ros::Time::now();
@@ -257,7 +257,7 @@ public:
 
         // Publish Ackermann message
         ackermann_cmd_pub_.publish(ackermann_cmd);
-
+        
         // Prevent counter overflow
         if (cmd_log_counter_ > 10000) {
             cmd_log_counter_ = 0;
@@ -332,10 +332,10 @@ public:
         th_ += delta_th;
 
         if (should_log) {
-            ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
-                     dt, delta_x, delta_y, delta_th);
-            ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
-                     x_, y_, th_);
+        ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
+                 dt, delta_x, delta_y, delta_th);
+        ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
+                 x_, y_, th_);
         }
 
         // Publish tf transform
