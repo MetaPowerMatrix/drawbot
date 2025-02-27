@@ -168,8 +168,9 @@ public:
 
     std::vector<uint8_t> createFrame(double linear_x, double angular_z) {
         // Scale linear and angular values to short range (-32768 to 32767)
-        double scale = 10000.0;  // Scaling factor
-        int16_t linear_x_scaled = static_cast<int16_t>(linear_x * scale);
+        double scale = 1000.0;  // Scaling factor
+        double linear_scale = 1000.0;  // Scaling factor
+        int16_t linear_x_scaled = static_cast<int16_t>(linear_x * linear_scale);
         int16_t angular_z_scaled = static_cast<int16_t>(angular_z * scale);
 
         // Ackermann vehicle: X linear velocity, Y linear velocity as 0, Z for angular
