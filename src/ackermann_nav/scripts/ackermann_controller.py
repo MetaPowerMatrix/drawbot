@@ -42,6 +42,7 @@ class AckermannController:
         self.max_speed = 1.0  # m/s
         self.max_steer = 0.5  # rad/s
         print "Ackermann Controller Initialized (Model C30D)"
+        self.start_monitoring()
 
     def check_ros_master(self):
         import socket
@@ -56,6 +57,63 @@ class AckermannController:
             return True
         except (socket.timeout, ConnectionRefusedError):
             return False
+
+    def start_monitoring(self):
+        def monitor_thread():
+            while not rospy.is_shutdown():
+                try:
+                    response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
+                    if response and len(response) == 24:
+                        print "Controller response (raw):", ' '.join(['%02x' % b for b in response])
+                        self.parse_uplink_frame(response)
+                    else:
+                        print "Incomplete or no response from controller."
+                except serial.SerialException as e:
+                    print "Serial read error: %s" % e
+                time.sleep(0.1)
+
+        import threading
+        self.monitor_thread = threading.Thread(target=monitor_thread)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+
+    def parse_uplink_frame(self, data):
+        # Parse 24-byte uplink frame (0x7B header, 0x7D tail)
+        if len(data) != 24 or data[0] != 0x7B or data[23] != 0x7D:
+            print "Invalid uplink frame format."
+            return
+
+        # Extract flag_stop (byte 1)
+        flag_stop = data[1]
+        print "Flag stop: %d" % flag_stop
+
+        # Extract velocities (short, big-endian)
+        x_linear, = struct.unpack('>h', data[2:4])  # X linear velocity
+        y_linear, = struct.unpack('>h', data[4:6])  # Y linear velocity
+        z_linear, = struct.unpack('>h', data[6:8])  # Z linear velocity
+        x_angular, = struct.unpack('>h', data[8:10])  # X angular velocity
+        y_angular, = struct.unpack('>h', data[10:12])  # Y angular velocity
+        z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (repeated in tail)
+
+        # Scale back to physical units (reverse of scale = 10000.0)
+        scale = 10000.0
+        print "X Linear Velocity: %.4f m/s" % (x_linear / scale)
+        print "Y Linear Velocity: %.4f m/s" % (y_linear / scale)
+        print "Z Linear Velocity: %.4f m/s" % (z_linear / scale)
+        print "X Angular Velocity: %.4f rad/s" % (x_angular / scale)
+        print "Y Angular Velocity: %.4f rad/s" % (y_angular / scale)
+        print "Z Angular Velocity: %.4f rad/s" % (z_angular / scale)
+
+        # Extract odometry (bytes 14-19, shorts)
+        odom1, = struct.unpack('>h', data[14:16])
+        odom2, = struct.unpack('>h', data[16:18])
+        print "Odometer 1: %d" % odom1
+        print "Odometer 2: %d" % odom2
+
+        # Checksum (byte 21, optional verification)
+        checksum = data[21]
+        calculated_checksum = self.calculate_checksum(data[:-3])  # Exclude checksum and tail
+        print "Received Checksum: %02x, Calculated Checksum: %02x" % (checksum, calculated_checksum)
 
     def create_frame(self, linear_x, angular_z):
         # Scale linear and angular values to short range (-32768 to 32767)
@@ -82,6 +140,13 @@ class AckermannController:
         frame[10] = 0x7D  # Frame tail
 
         return frame
+
+    def calculate_checksum(self, data):
+        # Simple sum checksum (sum of all bytes modulo 256)
+        checksum = 0
+        for byte in data:
+            checksum += byte
+        return checksum & 0xFF
 
     def cmd_vel_callback(self, msg):
         # Option 1: Send the specific frame you provided
@@ -117,8 +182,9 @@ class AckermannController:
     def shutdown(self):
         try:
             if self.serial_port and self.serial_port.is_open:
-                stop_frame = self.create_frame(0.0, 0.0)
+                stop_frame = self.create_frame(0.0, 0.0)  # Send stop command
                 self.serial_port.write(stop_frame)
+                print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])
                 self.serial_port.close()
                 print "Controller stopped and serial port closed."
         except serial.SerialException as e:
