@@ -63,50 +63,30 @@ class AckermannController:
         linear_x_scaled = int(linear_x * scale)
         angular_z_scaled = int(angular_z * scale)
 
-        # Ackermann vehicle: X linear velocity, Y and Z linear velocity as 0
-        # Angular velocity mapped to Z axis
-        x_linear = linear_x_scaled  # X linear velocity
-        y_linear = 0  # Y linear velocity
-        z_linear = 0  # Z linear velocity
-        x_angular = 0  # X angular velocity
-        y_angular = 0  # Y angular velocity
-        z_angular = angular_z_scaled  # Z angular velocity
+        # Ackermann vehicle: X linear velocity, Y linear velocity as 0, Z for angular
+        x_linear = linear_x_scaled  # X linear velocity (forward speed)
+        y_linear = 0  # Y linear velocity (assume 0 for Ackermann)
+        z_linear = angular_z_scaled  # Z linear velocity (map angular velocity)
 
-        # Construct 24-byte frame
-        frame = bytearray(24)
+        # Construct 11-byte frame
+        frame = bytearray(11)
         frame[0] = 0x7B  # Frame header
-        frame[1] = 0  # flag_stop = 0 (normal operation)
+        frame[1] = 0  # Flag byte 1 (assume 0)
+        frame[2] = 0  # Flag byte 2 (assume 0)
+        frame[3] = 0  # Flag byte 3 (assume 0)
 
-        # Pack short data (big-endian)
-        struct.pack_into('>h', frame, 2, x_linear)  # X linear velocity
-        struct.pack_into('>h', frame, 4, y_linear)  # Y linear velocity
-        struct.pack_into('>h', frame, 6, z_linear)  # Z linear velocity
-        struct.pack_into('>h', frame, 8, x_angular)  # X angular velocity
-        struct.pack_into('>h', frame, 10, y_angular)  # Y angular velocity
-        struct.pack_into('>h', frame, 12, z_angular)  # Z angular velocity
-
-        # Frame tail
-        struct.pack_into('>h', frame, 14, z_angular)  # Z angular velocity (repeated)
-        struct.pack_into('>h', frame, 16, 0)  # Odometer status (assume 0)
-        struct.pack_into('>h', frame, 18, 0)  # Odometer status (assume 0)
-        frame[21] = self.calculate_checksum(frame)  # Checksum
-        frame[23] = 0x7D  # Frame tail
+        # Pack short data (big-endian, MSB/LSB)
+        struct.pack_into('>h', frame, 4, x_linear)  # X linear velocity
+        struct.pack_into('>h', frame, 6, y_linear)  # Y linear velocity
+        struct.pack_into('>h', frame, 8, z_linear)  # Z linear velocity (angular)
+        frame[10] = 0x7D  # Frame tail
 
         return frame
-
-    def calculate_checksum(self, data):
-        # Simple sum checksum (sum of all bytes modulo 256)
-        checksum = 0
-        for byte in data[:-3]:  # Exclude checksum and frame tail
-            checksum += byte
-        return checksum & 0xFF
 
     def cmd_vel_callback(self, msg):
         # Option 1: Send the specific frame you provided
         specific_frame = bytearray([
-            0x7B, 0x00, 0x00, 0x9B, 0x00, 0x00, 0xFF, 0xDF,
-            0x00, 0x60, 0x00, 0x0C, 0x40, 0xA8, 0xFF, 0xFD,
-            0x00, 0x06, 0x00, 0x1E, 0x5B, 0x87, 0x82, 0x7D
+            0x7B, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x7D
         ])
         
         # Option 2: Generate dynamic frame from /cmd_vel
