@@ -164,12 +164,7 @@ class AckermannController:
         return checksum & 0xFF
 
     def cmd_vel_callback(self, msg):
-        # Option 1: Send the specific frame you provided
-        specific_frame = bytearray([
-            0x7B, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x7D
-        ])
-        
-        # Option 2: Generate dynamic frame from /cmd_vel
+        # Generate dynamic frame from /cmd_vel
         linear_speed = msg.linear.x
         angular_vel = msg.angular.z
         linear_speed = max(min(linear_speed, self.max_speed), -self.max_speed)
@@ -177,14 +172,8 @@ class AckermannController:
         dynamic_frame = self.create_frame(linear_speed, angular_vel)
 
         try:
-            # Uncomment one of the following lines to test:
-            # Test specific frame
-            self.serial_port.write(specific_frame)
-            print "Sent specific frame to controller (binary):", ' '.join(['%02x' % b for b in specific_frame])
-
-            # Test dynamic frame (comment out specific frame if testing this)
-            # self.serial_port.write(dynamic_frame)
-            # print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])
+            self.serial_port.write(dynamic_frame)
+            print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in [ord(c) for c in dynamic_frame]])
 
             # Check and parse response after sending (synchronous)
             time.sleep(0.1)  # Small delay to allow response
@@ -227,7 +216,7 @@ class AckermannController:
                 for attempt in range(3):  # Retry up to 3 times
                     try:
                         self.serial_port.write(stop_frame)
-                        print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])
+                        print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in [ord(c) for c in stop_frame]])
                         time.sleep(0.1)  # Small delay to ensure write completes
                         break
                     except serial.SerialException as e:
