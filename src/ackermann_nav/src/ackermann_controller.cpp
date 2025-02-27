@@ -177,8 +177,8 @@ public:
         int16_t y_linear = 0;                // Y linear velocity (assume 0 for Ackermann)
         int16_t z_linear = angular_z_scaled; // Z linear velocity (map angular velocity)
 
-        // Construct 11-byte frame
-        std::vector<uint8_t> frame(11);
+        // Construct 12-byte frame (changed from 11 to 12 to include tail)
+        std::vector<uint8_t> frame(12);
         frame[0] = 0x7B;  // Frame header
         frame[1] = 0;     // Flag byte 1 (always 0, no stop bit)
         frame[2] = 0;     // Flag byte 2 (assume 0)
@@ -233,48 +233,30 @@ public:
         }
         last_cmd_time = current_cmd_time;
 
-        // Convert Twist message to Ackermann steering command
+        // Convert Twist to Ackermann steering
+        double v = msg->linear.x;
+        double steering_angle = msg->angular.z;
+
+        // Apply limits
+        v = std::max(std::min(v, max_speed_), -max_speed_);
+        steering_angle = std::max(std::min(steering_angle, max_steering_angle_), -max_steering_angle_);
+
+        // Store for odometry updates
+        last_v_ = v;
+        last_steering_angle_ = steering_angle;
+
+        // Create Ackermann message
         ackermann_msgs::AckermannDriveStamped ackermann_cmd;
         ackermann_cmd.header.stamp = ros::Time::now();
         ackermann_cmd.header.frame_id = "base_link";
-
-        // Limit linear velocity within maximum speed range
-        double v = std::min(std::max(msg->linear.x, -max_speed_), max_speed_);
-        if (should_log) {
-            ROS_DEBUG("Limited linear velocity: %.3f", v);
-        }
-        
-        // Calculate steering angle
-        double steering_angle = 0.0;
-        if (fabs(v) > 0.001 && fabs(msg->angular.z) > 0.001) {  // Avoid division by zero
-            double radius = v / msg->angular.z;
-            steering_angle = atan(wheelbase_ / radius);
-            if (should_log) {
-                ROS_INFO("Steering calculation: velocity=%.3f, angular=%.3f, turn_radius=%.3f, steering_angle=%.3f",
-                         v, msg->angular.z, radius, steering_angle);
-            }
-        } else if (should_log) {
-            ROS_INFO("Velocity or angular velocity too small, maintaining straight path: velocity=%.3f, angular=%.3f",
-                     v, msg->angular.z);
-        }
-        
-        // Limit steering angle within maximum range
-        double original_angle = steering_angle;
-        steering_angle = std::min(std::max(steering_angle, -max_steering_angle_),
-                                max_steering_angle_);
-        if (fabs(original_angle - steering_angle) > 0.001 && should_log) {
-            ROS_WARN("Steering angle exceeds limit: original=%.3f, limited=%.3f",
-                     original_angle, steering_angle);
-        }
-
-        ackermann_cmd.drive.steering_angle = steering_angle;
         ackermann_cmd.drive.speed = v;
+        ackermann_cmd.drive.steering_angle = steering_angle;
+        ackermann_cmd.drive.steering_angle_velocity = 0.0;
+        ackermann_cmd.drive.acceleration = 0.0;
+        ackermann_cmd.drive.jerk = 0.0;
 
+        // Publish Ackermann message
         ackermann_cmd_pub_.publish(ackermann_cmd);
-        
-        // Save current velocity and steering angle
-        last_v_ = v;
-        last_steering_angle_ = steering_angle;
 
         // Prevent counter overflow
         if (cmd_log_counter_ > 10000) {
@@ -284,35 +266,23 @@ public:
         ROS_INFO_THROTTLE(1.0, "Publishing Ackermann command: speed=%.3f, steering_angle=%.3f", 
                          ackermann_cmd.drive.speed, ackermann_cmd.drive.steering_angle);
 
-        // Send command to hardware controller
-        sendCommandToController(v, steering_angle);
-    }
-
-    void sendCommandToController(double linear_speed, double angular_vel) {
         try {
             std::lock_guard<std::mutex> lock(serial_mutex_);
-            if (!serial_port_.isOpen()) {
-                ROS_ERROR("Serial port not open");
-                return;
-            }
-
-            // Option 1: Send specific frame (for testing)
-            std::vector<uint8_t> specific_frame = {
-                0x7B, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x1F, 0x7D
-            };
             
-            // Option 2: Generate dynamic frame from velocity command
+            // Generate dynamic frame from velocity command
+            double linear_speed = v;
+            double angular_vel = steering_angle;
             std::vector<uint8_t> dynamic_frame = createFrame(linear_speed, angular_vel);
 
-            // Send the frame (uncomment one of these)
-            serial_port_.write(specific_frame.data(), specific_frame.size());
+            // Send the frame
+            serial_port_.write(dynamic_frame.data(), dynamic_frame.size());
             
             // Format frame for logging
             std::stringstream ss;
-            for (size_t i = 0; i < specific_frame.size(); ++i) {
-                ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(specific_frame[i]) << " ";
+            for (size_t i = 0; i < dynamic_frame.size(); ++i) {
+                ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(dynamic_frame[i]) << " ";
             }
-            ROS_INFO("Sent specific frame to controller (binary): %s", ss.str().c_str());
+            ROS_INFO("Sent frame to controller (binary): %s", ss.str().c_str());
 
             // Wait for response
             ros::Duration(0.1).sleep();

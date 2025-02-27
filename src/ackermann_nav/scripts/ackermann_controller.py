@@ -44,6 +44,7 @@ class AckermannController:
         self.max_steer = 0.5  # rad/s
         print "Ackermann Controller Initialized (Model C30D)"
         self.is_shutting_down = False  # Initialize here to ensure availability
+        self.frame_id = 21  # Initialize frame ID starting at 21
         self.start_monitoring()
 
         # Register signal handler for Ctrl+C
@@ -91,77 +92,88 @@ class AckermannController:
             print "Invalid uplink frame format."
             return
 
-        # Extract flag_stop (byte 1, though you mentioned no stop bit)
+        # Extract flag_stop (byte 1)
         flag_stop = data[1]
-        print "Flag (byte 1): %d" % flag_stop
+        print "Flag stop: %d" % flag_stop
 
         # Extract velocities (short, big-endian)
-        x_linear, = struct.unpack('>h', data[2:4])  # X linear velocity
-        y_linear, = struct.unpack('>h', data[4:6])  # Y linear velocity
-        z_linear, = struct.unpack('>h', data[6:8])  # Z linear velocity
-        x_angular, = struct.unpack('>h', data[8:10])  # X angular velocity
-        y_angular, = struct.unpack('>h', data[10:12])  # Y angular velocity
-        z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (repeated in tail)
+        x_linear, = struct.unpack('>h', data[2:4])  # X linear velocity (mm/s)
+        y_linear, = struct.unpack('>h', data[4:6])  # Y linear velocity (mm/s)
+        z_linear, = struct.unpack('>h', data[6:8])  # Z linear velocity (mm/s)
+        x_angular, = struct.unpack('>h', data[8:10])  # X angular velocity (rad/s, scaled by 1000)
+        y_angular, = struct.unpack('>h', data[10:12])  # Y angular velocity (rad/s, scaled by 1000)
+        z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (rad/s, scaled by 1000)
 
-        # Scale back to physical units (reverse of scale = 10000.0)
-        scale = 10000.0
-        print "X Linear Velocity: %.4f m/s" % (x_linear / scale)
-        print "Y Linear Velocity: %.4f m/s" % (y_linear / scale)
-        print "Z Linear Velocity: %.4f m/s" % (z_linear / scale)
-        print "X Angular Velocity: %.4f rad/s" % (x_angular / scale)
-        print "Y Angular Velocity: %.4f rad/s" % (y_angular / scale)
-        print "Z Angular Velocity: %.4f rad/s" % (z_angular / scale)
+        # Extract accelerations (short, big-endian)
+        x_acceleration, = struct.unpack('>h', data[14:16])  # X acceleration (mm/s², scaled by 1000)
+        y_acceleration, = struct.unpack('>h', data[16:18])  # Y acceleration (mm/s², scaled by 1000)
+        z_acceleration, = struct.unpack('>h', data[18:20])  # Z acceleration (mm/s², scaled by 1000)
 
-        # Extract odometry (bytes 14-19, shorts)
-        odom1, = struct.unpack('>h', data[14:16])
-        odom2, = struct.unpack('>h', data[16:18])
-        print "Odometer 1: %d" % odom1
-        print "Odometer 2: %d" % odom2
+        # Scale to physical units
+        print "X Linear Velocity: %.4f m/s" % (x_linear / 1000.0)  # Convert mm/s to m/s
+        print "Y Linear Velocity: %.4f m/s" % (y_linear / 1000.0)  # Convert mm/s to m/s
+        print "Z Linear Velocity: %.4f m/s" % (z_linear / 1000.0)  # Convert mm/s to m/s
+        print "X Angular Velocity: %.4f rad/s" % (x_angular / 1000.0)  # Scale down by 1000
+        print "Y Angular Velocity: %.4f rad/s" % (y_angular / 1000.0)  # Scale down by 1000
+        print "Z Angular Velocity: %.4f rad/s" % (z_angular / 1000.0)  # Scale down by 1000
+        print "X Acceleration: %.4f m/s²" % (x_acceleration / 1000.0)  # Convert mm/s² to m/s²
+        print "Y Acceleration: %.4f m/s²" % (y_acceleration / 1000.0)  # Convert mm/s² to m/s²
+        print "Z Acceleration: %.4f m/s²" % (z_acceleration / 1000.0)  # Convert mm/s² to m/s²
 
-        # Checksum (byte 21, optional verification)
+        # Checksum (byte 21, BCC verification)
         checksum = data[21]
-        calculated_checksum = self.calculate_checksum(data[:-3])  # Exclude checksum and tail
-        print "Received Checksum: %02x, Calculated Checksum: %02x" % (checksum, calculated_checksum)
+        calculated_checksum = self.calculate_bcc(data[:-2])  # Exclude checksum and tail
+        print "Received Checksum (BCC): %02x, Calculated Checksum (BCC): %02x" % (checksum, calculated_checksum)
 
-    def create_frame(self, linear_x, angular_z):
-        # Scale linear and angular values to short range (-32768 to 32767)
-        scale = 10000.0  # Scaling factor, adjust if needed
-        linear_x_scaled = int(linear_x * scale)
-        angular_z_scaled = int(angular_z * scale)
-
-        # Ackermann vehicle: X linear velocity, Y linear velocity as 0, Z for angular
-        x_linear = linear_x_scaled  # X linear velocity (forward speed)
-        y_linear = 0  # Y linear velocity (assume 0 for Ackermann)
-        z_linear = angular_z_scaled  # Z linear velocity (map angular velocity)
-
-        # Construct 11-byte frame
-        frame = bytearray(11)
-        frame[0] = 0x7B  # Frame header
-        frame[1] = 0  # Flag byte 1 (always 0, no stop bit)
-        frame[2] = 0  # Flag byte 2 (assume 0)
-        frame[3] = 0  # Flag byte 3 (assume 0)
-
-        # Pack short data (big-endian, MSB/LSB)
-        struct.pack_into('>h', frame, 4, x_linear)  # X linear velocity
-        struct.pack_into('>h', frame, 6, y_linear)  # Y linear velocity
-        struct.pack_into('>h', frame, 8, z_linear)  # Z linear velocity (angular)
-
-        # Calculate BCC (XOR of first 9 bytes)
+    def calculate_bcc(self, data):
+        # BCC (XOR of all bytes in data)
         bcc = 0
-        for i in range(9):
-            bcc ^= frame[i]
-        frame[9] = bcc  # Set BCC checksum
-
-        frame[10] = 0x7D  # Frame tail
-
-        return frame
+        for byte in data:
+            bcc ^= byte
+        return bcc
 
     def calculate_checksum(self, data):
-        # Simple sum checksum (sum of all bytes modulo 256) - for uplink verification
+        # Simple sum checksum (sum of all bytes modulo 256) - legacy for uplink verification
         checksum = 0
         for byte in data:
             checksum += byte
         return checksum & 0xFF
+
+    def create_frame(self, linear_x, angular_z):
+        # Scale linear and angular values to short range (-32768 to 32767)
+        # Convert m/s to mm/s and rad/s to scaled rad/s (x1000)
+        scale_linear = 1000.0  # Convert m/s to mm/s
+        scale_angular = 1000.0  # Scale rad/s by 1000
+        linear_x_scaled = int(linear_x * scale_linear)  # mm/s
+        angular_z_scaled = int(angular_z * scale_angular)  # rad/s * 1000
+
+        # Ackermann vehicle: X linear velocity, Y linear velocity as 0, Z for angular
+        x_linear = linear_x_scaled  # X linear velocity (forward speed, mm/s)
+        y_linear = 0  # Y linear velocity (assume 0 for Ackermann, mm/s)
+        z_linear = angular_z_scaled  # Z linear velocity (map angular velocity, rad/s * 1000)
+
+        # Construct 9-byte frame
+        frame = bytearray(9)
+        frame[0] = 0x7B  # Frame header
+        # Set frame ID (start at 21, increment to 50, then reset to 0)
+        self.frame_id = (self.frame_id + 1) % 50  # Cycle between 0 and 49
+        if self.frame_id < 21:
+            self.frame_id = 21  # Ensure starts at 21
+        frame_id = self.frame_id
+        struct.pack_into('>H', frame, 1, frame_id)  # Frame ID (2 bytes, big-endian)
+
+        # Pack short data (big-endian, MSB/LSB for X and Y, MSB for Z)
+        struct.pack_into('>h', frame, 3, x_linear)  # X linear velocity (mm/s)
+        struct.pack_into('>h', frame, 5, y_linear)  # Y linear velocity (mm/s)
+        frame[7] = (z_linear >> 8) & 0xFF  # Z linear velocity (MSB, rad/s * 1000)
+
+        # Calculate BCC (XOR of first 8 bytes)
+        bcc = 0
+        for i in range(8):
+            bcc ^= frame[i]
+        frame[8] = bcc  # Set BCC checksum
+
+        return frame
 
     def cmd_vel_callback(self, msg):
         # Generate dynamic frame from /cmd_vel
@@ -173,7 +185,7 @@ class AckermannController:
 
         try:
             self.serial_port.write(dynamic_frame)
-            print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in [ord(c) for c in dynamic_frame]])
+            print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])  # Use dynamic_frame directly
 
             # Check and parse response after sending (synchronous)
             time.sleep(0.1)  # Small delay to allow response
@@ -216,7 +228,7 @@ class AckermannController:
                 for attempt in range(3):  # Retry up to 3 times
                     try:
                         self.serial_port.write(stop_frame)
-                        print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in [ord(c) for c in stop_frame]])
+                        print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])  # Use stop_frame directly
                         time.sleep(0.1)  # Small delay to ensure write completes
                         break
                     except serial.SerialException as e:
