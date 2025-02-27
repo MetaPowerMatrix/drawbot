@@ -47,6 +47,7 @@ class AckermannController:
 
         # Register signal handler for Ctrl+C
         signal.signal(signal.SIGINT, self.signal_handler)
+        self.is_shutting_down = False  # Flag to indicate shutdown
 
     def check_ros_master(self):
         import socket
@@ -64,16 +65,17 @@ class AckermannController:
 
     def start_monitoring(self):
         def monitor_thread():
-            while not rospy.is_shutdown():
+            while not self.is_shutting_down:  # Use shutdown flag
                 try:
                     response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
-                    if response and len(response) == 24:
+                    if response and len(response) == 24 and not self.is_shutting_down:
                         print "Controller response (raw):", ' '.join(['%02x' % b for b in response])
                         self.parse_uplink_frame(response)
                     else:
                         print "Incomplete or no response from controller."
                 except serial.SerialException as e:
-                    print "Serial read error: %s" % e
+                    if not self.is_shutting_down:  # Only print if not shutting down
+                        print "Serial read error: %s" % e
                 time.sleep(0.1)
 
         import threading
@@ -187,17 +189,27 @@ class AckermannController:
             rospy.spin()
         except KeyboardInterrupt:
             self.shutdown()
+        except Exception as e:
+            print "Unexpected error: %s" % e
+            self.shutdown()
 
     def shutdown(self):
+        if self.is_shutting_down:
+            return  # Prevent re-entry
+        self.is_shutting_down = True
         try:
             if self.serial_port and self.serial_port.is_open:
                 stop_frame = self.create_frame(0.0, 0.0)  # Send stop command
                 self.serial_port.write(stop_frame)
                 print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])
+                # Ensure port stays open long enough for write
+                time.sleep(0.1)  # Small delay to ensure write completes
                 self.serial_port.close()
                 print "Controller stopped and serial port closed."
         except serial.SerialException as e:
             print "Error during shutdown: %s" % e
+        finally:
+            self.is_shutting_down = False  # Reset flag
 
 if __name__ == '__main__':
     if "ROS_DISTRO" not in os.environ:
