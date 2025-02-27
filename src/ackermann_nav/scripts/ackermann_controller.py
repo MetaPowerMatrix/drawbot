@@ -198,6 +198,11 @@ class AckermannController:
             return  # Prevent re-entry
         self.is_shutting_down = True
         try:
+            # Unsubscribe from /cmd_vel to stop receiving new commands
+            if hasattr(self, 'subscriber') and self.subscriber:
+                self.subscriber.unregister()
+                print "Unsubscribed from /cmd_vel topic."
+
             if self.serial_port and self.serial_port.is_open:
                 stop_frame = self.create_frame(0.0, 0.0)  # Send stop command
                 self.serial_port.write(stop_frame)
