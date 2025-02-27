@@ -69,13 +69,13 @@ class AckermannController:
                 try:
                     response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
                     if response and len(response) == 24 and not self.is_shutting_down:
-                        print "Controller response (raw):", ' '.join(['%02x' % b for b in response])
+                        print "Controller async response (raw):", ' '.join(['%02x' % b for b in response])
                         self.parse_uplink_frame(response)
                     else:
-                        print "Incomplete or no response from controller."
+                        print "Incomplete or no async response from controller."
                 except serial.SerialException as e:
                     if not self.is_shutting_down:  # Only print if not shutting down
-                        print "Serial read error: %s" % e
+                        print "Serial read error (async): %s" % e
                 time.sleep(0.1)
 
         import threading
@@ -89,9 +89,9 @@ class AckermannController:
             print "Invalid uplink frame format."
             return
 
-        # Extract flag_stop (byte 1)
+        # Extract flag_stop (byte 1, though you mentioned no stop bit)
         flag_stop = data[1]
-        print "Flag stop: %d" % flag_stop
+        print "Flag (byte 1): %d" % flag_stop
 
         # Extract velocities (short, big-endian)
         x_linear, = struct.unpack('>h', data[2:4])  # X linear velocity
@@ -135,7 +135,7 @@ class AckermannController:
         # Construct 11-byte frame
         frame = bytearray(11)
         frame[0] = 0x7B  # Frame header
-        frame[1] = 0  # Flag byte 1 (assume 0)
+        frame[1] = 0  # Flag byte 1 (always 0, no stop bit)
         frame[2] = 0  # Flag byte 2 (assume 0)
         frame[3] = 0  # Flag byte 3 (assume 0)
 
@@ -143,12 +143,19 @@ class AckermannController:
         struct.pack_into('>h', frame, 4, x_linear)  # X linear velocity
         struct.pack_into('>h', frame, 6, y_linear)  # Y linear velocity
         struct.pack_into('>h', frame, 8, z_linear)  # Z linear velocity (angular)
+
+        # Calculate BCC (XOR of first 9 bytes)
+        bcc = 0
+        for i in range(9):
+            bcc ^= frame[i]
+        frame[9] = bcc  # Set BCC checksum
+
         frame[10] = 0x7D  # Frame tail
 
         return frame
 
     def calculate_checksum(self, data):
-        # Simple sum checksum (sum of all bytes modulo 256)
+        # Simple sum checksum (sum of all bytes modulo 256) - for uplink verification
         checksum = 0
         for byte in data:
             checksum += byte
@@ -176,8 +183,17 @@ class AckermannController:
             # Test dynamic frame (comment out specific frame if testing this)
             # self.serial_port.write(dynamic_frame)
             # print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])
+
+            # Check and parse response after sending
+            time.sleep(0.1)  # Small delay to allow response
+            response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
+            if response and len(response) == 24:
+                print "Controller sync response (raw):", ' '.join(['%02x' % b for b in response])
+                self.parse_uplink_frame(response)
+            else:
+                print "No sync response or incomplete response from controller."
         except serial.SerialException as e:
-            print "Serial write error: %s" % e
+            print "Serial write or read error: %s" % e
 
     def signal_handler(self, signal, frame):
         print "\nReceived Ctrl+C, shutting down..."
@@ -204,11 +220,28 @@ class AckermannController:
                 print "Unsubscribed from /cmd_vel topic."
 
             if self.serial_port and self.serial_port.is_open:
-                stop_frame = self.create_frame(0.0, 0.0)  # Send stop command
-                self.serial_port.write(stop_frame)
-                print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])
-                # Ensure port stays open long enough for write
-                time.sleep(0.1)  # Small delay to ensure write completes
+                # Send stop command with all velocities = 0, frame[1] = 0, and correct BCC
+                stop_frame = self.create_frame(0.0, 0.0)
+                for attempt in range(3):  # Retry up to 3 times
+                    try:
+                        self.serial_port.write(stop_frame)
+                        print "Sent stop command to controller (binary):", ' '.join(['%02x' % b for b in stop_frame])
+                        time.sleep(0.1)  # Small delay to ensure write completes
+                        break
+                    except serial.SerialException as e:
+                        print "Serial write error (attempt %d): %s" % (attempt + 1, e)
+                        if attempt == 2:
+                            print "Failed to send stop command after 3 attempts."
+
+                # Check and parse response after sending stop command
+                time.sleep(0.1)  # Small delay to allow response
+                response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
+                if response and len(response) == 24:
+                    print "Controller sync response after stop (raw):", ' '.join(['%02x' % b for b in response])
+                    self.parse_uplink_frame(response)
+                else:
+                    print "No sync response or incomplete response from controller after stop."
+
                 self.serial_port.close()
                 print "Controller stopped and serial port closed."
         except serial.SerialException as e:
