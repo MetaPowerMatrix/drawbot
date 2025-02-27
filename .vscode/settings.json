@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "MLTable": "yaml",
-        "__node_handle": "cpp"
+        "__node_handle": "cpp",
+        "iomanip": "cpp"
     }
 }

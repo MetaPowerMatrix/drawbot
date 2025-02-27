@@ -73,7 +73,7 @@ public:
         }
 
         // Start monitoring thread
-        startMonitoring();
+        // startMonitoring();
 
         ackermann_cmd_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
             "ackermann_cmd", 10);
@@ -182,24 +182,23 @@ public:
         frame[0] = 0x7B;  // Frame header
         frame[1] = 0;     // Flag byte 1 (always 0, no stop bit)
         frame[2] = 0;     // Flag byte 2 (assume 0)
-        frame[3] = 0;     // Flag byte 3 (assume 0)
 
         // Pack short data (big-endian, MSB/LSB)
-        frame[4] = (x_linear >> 8) & 0xFF;  // X linear velocity MSB
-        frame[5] = x_linear & 0xFF;         // X linear velocity LSB
-        frame[6] = (y_linear >> 8) & 0xFF;  // Y linear velocity MSB
-        frame[7] = y_linear & 0xFF;         // Y linear velocity LSB
-        frame[8] = (z_linear >> 8) & 0xFF;  // Z linear velocity MSB
-        frame[9] = z_linear & 0xFF;         // Z linear velocity LSB
+        frame[3] = (x_linear >> 8) & 0xFF;  // X linear velocity MSB
+        frame[4] = x_linear & 0xFF;         // X linear velocity LSB
+        frame[5] = (y_linear >> 8) & 0xFF;  // Y linear velocity MSB
+        frame[6] = y_linear & 0xFF;         // Y linear velocity LSB
+        frame[7] = (z_linear >> 8) & 0xFF;  // Z linear velocity MSB
+        frame[8] = z_linear & 0xFF;         // Z linear velocity LSB
 
         // Calculate BCC (XOR of first 10 bytes)
         uint8_t bcc = 0;
         for (int i = 0; i < 10; ++i) {
             bcc ^= frame[i];
         }
-        frame[10] = bcc;  // Set BCC checksum
+        frame[9] = bcc;  // Set BCC checksum
 
-        frame[11] = 0x7D;  // Frame tail
+        frame[10] = 0x7D;  // Frame tail
 
         return frame;
     }
@@ -221,7 +220,7 @@ public:
         bool should_log = (cmd_log_counter_ % CMD_LOG_INTERVAL == 0);
         
         if (should_log) {
-        ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
+            ROS_INFO("Received velocity command: linear=%.3f, angular=%.3f", msg->linear.x, msg->angular.z);
         }
 
         static ros::Time last_cmd_time = ros::Time::now();
@@ -285,24 +284,24 @@ public:
             ROS_INFO("Sent frame to controller (binary): %s", ss.str().c_str());
 
             // Wait for response
-            ros::Duration(0.1).sleep();
+            // ros::Duration(0.1).sleep();
             
             // Read response
-            if (serial_port_.available() >= 24) {
-                std::vector<uint8_t> response(24);
-                size_t bytes_read = serial_port_.read(response.data(), 24);
+            // if (serial_port_.available() >= 24) {
+            //     std::vector<uint8_t> response(24);
+            //     size_t bytes_read = serial_port_.read(response.data(), 24);
                 
-                if (bytes_read == 24) {
-                    std::stringstream ss_resp;
-                    for (size_t i = 0; i < bytes_read; ++i) {
-                        ss_resp << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(response[i]) << " ";
-                    }
-                    ROS_INFO("Controller sync response (raw): %s", ss_resp.str().c_str());
-                    parseUplinkFrame(response);
-                } else {
-                    ROS_WARN("No sync response or incomplete response from controller.");
-                }
-            }
+            //     if (bytes_read == 24) {
+            //         std::stringstream ss_resp;
+            //         for (size_t i = 0; i < bytes_read; ++i) {
+            //             ss_resp << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(response[i]) << " ";
+            //         }
+            //         ROS_INFO("Controller sync response (raw): %s", ss_resp.str().c_str());
+            //         parseUplinkFrame(response);
+            //     } else {
+            //         ROS_WARN("No sync response or incomplete response from controller.");
+            //     }
+            // }
         } catch (const std::exception& e) {
             ROS_ERROR("Serial write or read error: %s", e.what());
         }
