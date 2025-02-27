@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import sys
 import os
@@ -105,9 +106,9 @@ class AckermannController:
         z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (rad/s, scaled by 1000)
 
         # Extract accelerations (short, big-endian)
-        x_acceleration, = struct.unpack('>h', data[14:16])  # X acceleration (mm/s², scaled by 1000)
-        y_acceleration, = struct.unpack('>h', data[16:18])  # Y acceleration (mm/s², scaled by 1000)
-        z_acceleration, = struct.unpack('>h', data[18:20])  # Z acceleration (mm/s², scaled by 1000)
+        x_acceleration, = struct.unpack('>h', data[14:16])  # X acceleration (mm/s^2, scaled by 1000)
+        y_acceleration, = struct.unpack('>h', data[16:18])  # Y acceleration (mm/s^2, scaled by 1000)
+        z_acceleration, = struct.unpack('>h', data[18:20])  # Z acceleration (mm/s^2, scaled by 1000)
 
         # Scale to physical units
         print "X Linear Velocity: %.4f m/s" % (x_linear / 1000.0)  # Convert mm/s to m/s
@@ -116,9 +117,9 @@ class AckermannController:
         print "X Angular Velocity: %.4f rad/s" % (x_angular / 1000.0)  # Scale down by 1000
         print "Y Angular Velocity: %.4f rad/s" % (y_angular / 1000.0)  # Scale down by 1000
         print "Z Angular Velocity: %.4f rad/s" % (z_angular / 1000.0)  # Scale down by 1000
-        print "X Acceleration: %.4f m/s²" % (x_acceleration / 1000.0)  # Convert mm/s² to m/s²
-        print "Y Acceleration: %.4f m/s²" % (y_acceleration / 1000.0)  # Convert mm/s² to m/s²
-        print "Z Acceleration: %.4f m/s²" % (z_acceleration / 1000.0)  # Convert mm/s² to m/s²
+        print "X Acceleration: %.4f m/s^2" % (x_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
+        print "Y Acceleration: %.4f m/s^2" % (y_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
+        print "Z Acceleration: %.4f m/s^2" % (z_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
 
         # Checksum (byte 21, BCC verification)
         checksum = data[21]
