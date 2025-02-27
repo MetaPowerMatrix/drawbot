@@ -3,6 +3,7 @@
 import sys
 import os
 import struct
+import signal
 try:
     import rospy
     from geometry_msgs.msg import Twist
@@ -43,6 +44,9 @@ class AckermannController:
         self.max_steer = 0.5  # rad/s
         print "Ackermann Controller Initialized (Model C30D)"
         self.start_monitoring()
+
+        # Register signal handler for Ctrl+C
+        signal.signal(signal.SIGINT, self.signal_handler)
 
     def check_ros_master(self):
         import socket
@@ -172,6 +176,11 @@ class AckermannController:
             # print "Sent dynamic frame to controller (binary):", ' '.join(['%02x' % b for b in dynamic_frame])
         except serial.SerialException as e:
             print "Serial write error: %s" % e
+
+    def signal_handler(self, signal, frame):
+        print "\nReceived Ctrl+C, shutting down..."
+        self.shutdown()
+        sys.exit(0)
 
     def run(self):
         try:
