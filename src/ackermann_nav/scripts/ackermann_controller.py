@@ -45,7 +45,6 @@ class AckermannController:
         self.max_steer = 0.5  # rad/s
         print "Ackermann Controller Initialized (Model C30D)"
         self.is_shutting_down = False  # Initialize here to ensure availability
-        self.frame_id = 21  # Initialize frame ID starting at 21
         self.start_monitoring()
 
         # Register signal handler for Ctrl+C
@@ -101,14 +100,19 @@ class AckermannController:
         x_linear, = struct.unpack('>h', data[2:4])  # X linear velocity (mm/s)
         y_linear, = struct.unpack('>h', data[4:6])  # Y linear velocity (mm/s)
         z_linear, = struct.unpack('>h', data[6:8])  # Z linear velocity (mm/s)
-        x_angular, = struct.unpack('>h', data[8:10])  # X angular velocity (rad/s, scaled by 1000)
-        y_angular, = struct.unpack('>h', data[10:12])  # Y angular velocity (rad/s, scaled by 1000)
-        z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (rad/s, scaled by 1000)
 
         # Extract accelerations (short, big-endian)
         x_acceleration, = struct.unpack('>h', data[14:16])  # X acceleration (mm/s^2, scaled by 1000)
         y_acceleration, = struct.unpack('>h', data[16:18])  # Y acceleration (mm/s^2, scaled by 1000)
         z_acceleration, = struct.unpack('>h', data[18:20])  # Z acceleration (mm/s^2, scaled by 1000)
+
+        # Extract angular velocities (short, big-endian, after accelerations)
+        x_angular, = struct.unpack('>h', data[8:10])  # X angular velocity (rad/s, scaled by 1000)
+        y_angular, = struct.unpack('>h', data[10:12])  # Y angular velocity (rad/s, scaled by 1000)
+        z_angular, = struct.unpack('>h', data[12:14])  # Z angular velocity (rad/s, scaled by 1000)
+
+        # Extract battery voltage (short, big-endian)
+        battery_voltage, = struct.unpack('>h', data[20:22])  # Battery voltage (mV)
 
         # Scale to physical units
         print "X Linear Velocity: %.4f m/s" % (x_linear / 1000.0)  # Convert mm/s to m/s
@@ -120,10 +124,11 @@ class AckermannController:
         print "X Acceleration: %.4f m/s^2" % (x_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
         print "Y Acceleration: %.4f m/s^2" % (y_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
         print "Z Acceleration: %.4f m/s^2" % (z_acceleration / 1000.0)  # Convert mm/s^2 to m/s^2
+        print "Battery Voltage: %.3f V" % (battery_voltage / 1000.0)  # Convert mV to V
 
-        # Checksum (byte 21, BCC verification)
-        checksum = data[21]
-        calculated_checksum = self.calculate_bcc(data[:-2])  # Exclude checksum and tail
+        # Checksum (byte 22, BCC verification)
+        checksum = data[22]
+        calculated_checksum = self.calculate_bcc(data[:-1])  # Exclude checksum and tail
         print "Received Checksum (BCC): %02x, Calculated Checksum (BCC): %02x" % (checksum, calculated_checksum)
 
     def calculate_bcc(self, data):
@@ -153,26 +158,24 @@ class AckermannController:
         y_linear = 0  # Y linear velocity (assume 0 for Ackermann, mm/s)
         z_linear = angular_z_scaled  # Z linear velocity (map angular velocity, rad/s * 1000)
 
-        # Construct 9-byte frame
-        frame = bytearray(9)
+        # Construct 11-byte frame
+        frame = bytearray(11)
         frame[0] = 0x7B  # Frame header
-        # Set frame ID (start at 21, increment to 50, then reset to 0)
-        self.frame_id = (self.frame_id + 1) % 50  # Cycle between 0 and 49
-        if self.frame_id < 21:
-            self.frame_id = 21  # Ensure starts at 21
-        frame_id = self.frame_id
-        struct.pack_into('>H', frame, 1, frame_id)  # Frame ID (2 bytes, big-endian)
+        frame[1] = 0  # Reserved bit, set to 0
+        frame[2] = 0  # Reserved bit, set to 0
 
-        # Pack short data (big-endian, MSB/LSB for X and Y, MSB for Z)
+        # Pack short data (big-endian, MSB/LSB)
         struct.pack_into('>h', frame, 3, x_linear)  # X linear velocity (mm/s)
         struct.pack_into('>h', frame, 5, y_linear)  # Y linear velocity (mm/s)
-        frame[7] = (z_linear >> 8) & 0xFF  # Z linear velocity (MSB, rad/s * 1000)
+        struct.pack_into('>h', frame, 7, z_linear)  # Z linear velocity (angular, rad/s * 1000)
 
-        # Calculate BCC (XOR of first 8 bytes)
+        # Calculate BCC (XOR of first 9 bytes)
         bcc = 0
-        for i in range(8):
+        for i in range(9):
             bcc ^= frame[i]
-        frame[8] = bcc  # Set BCC checksum
+        frame[9] = bcc  # Set BCC checksum
+
+        frame[10] = 0x7D  # Frame tail
 
         return frame
 
@@ -224,7 +227,7 @@ class AckermannController:
                 print "Unsubscribed from /cmd_vel topic."
 
             if self.serial_port and self.serial_port.is_open:
-                # Send stop command with all velocities = 0, frame[1] = 0, and correct BCC
+                # Send stop command with all velocities = 0, and correct BCC (no flag_stop or frame_id)
                 stop_frame = self.create_frame(0.0, 0.0)
                 for attempt in range(3):  # Retry up to 3 times
                     try:
