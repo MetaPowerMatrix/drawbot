@@ -69,7 +69,9 @@ class AckermannController:
                 try:
                     response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
                     if response and len(response) == 24 and not self.is_shutting_down:
-                        print "Controller async response (raw):", ' '.join(['%02x' % b for b in response])
+                        # Convert response bytes to integers for %x formatting
+                        byte_values = [ord(b) for b in response]  # Python 2: use ord() for str
+                        print "Controller async response (raw):", ' '.join(['%02x' % b for b in byte_values])
                         self.parse_uplink_frame(response)
                     else:
                         print "Incomplete or no async response from controller."
@@ -188,7 +190,7 @@ class AckermannController:
             time.sleep(0.1)  # Small delay to allow response
             response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
             if response and len(response) == 24:
-                print "Controller sync response (raw):", ' '.join(['%02x' % b for b in response])
+                print "Controller sync response (raw):", ' '.join(['%02x' % b for b in [ord(c) for c in response]])
                 self.parse_uplink_frame(response)
             else:
                 print "No sync response or incomplete response from controller."
@@ -237,7 +239,7 @@ class AckermannController:
                 time.sleep(0.1)  # Small delay to allow response
                 response = self.serial_port.read(24)  # Read 24 bytes for uplink frame
                 if response and len(response) == 24:
-                    print "Controller sync response after stop (raw):", ' '.join(['%02x' % b for b in response])
+                    print "Controller sync response after stop (raw):", ' '.join(['%02x' % b for b in [ord(c) for c in response]])
                     self.parse_uplink_frame(response)
                 else:
                     print "No sync response or incomplete response from controller after stop."
