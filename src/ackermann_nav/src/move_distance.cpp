@@ -94,14 +94,17 @@ public:
         if (angle_first_ && !angle_finished_) {
             ROS_DEBUG("Current angle error: %.2f rad", angle_diff);
             
-            // 增加最小角速度控制
+            // 带小速度转向阶段
             if (fabs(angle_diff) < 0.05) {
                 angle_finished_ = true;
-                ROS_INFO("Rotation completed");
+                // 重置起始位置和朝向
+                start_x_ = msg->pose.pose.position.x;
+                start_y_ = msg->pose.pose.position.y;
+                start_th_ = tf::getYaw(msg->pose.pose.orientation);
+                ROS_INFO("Rotation completed, new start position: (%.2f, %.2f)", start_x_, start_y_);
             } else {
-                // 根据角度差动态调整角速度
-                double speed_factor = std::min(fabs(angle_diff)/0.5, 1.0);
-                move(true, angle_diff, speed_factor);
+                // 带小线速度转向（0.1 m/s）
+                move(true, angle_diff);
                 return;
             }
         }
@@ -133,14 +136,18 @@ public:
     void move(bool rotating, double angle_error, double speed_factor=1.0) {
         geometry_msgs::Twist cmd_vel;
         if (rotating) {
-            // 优化转向控制：更平滑的角速度控制
-            cmd_vel.angular.z = (angle_error < 0 ? -1 : 1) * angular_speed_ * speed_factor;
-            cmd_vel.linear.x = 0.1;
-            ROS_DEBUG("Rotating with angular speed: %.2f", cmd_vel.angular.z);
+            // 转向阶段：小速度前进+转向
+            cmd_vel.linear.x = 0.05;  // 转向时的小前进速度
+            cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
+            ROS_DEBUG("Steering with speed: %.2f m/s, angular: %.2f rad/s", 
+                     cmd_vel.linear.x, cmd_vel.angular.z);
         } else {
+            // 直线阶段：正常速度+方向微调
+            double heading_error = target_angle_ - (current_th - start_th_);
             cmd_vel.linear.x = linear_speed_;
-            cmd_vel.angular.z = 0.0;
-            ROS_DEBUG("Moving forward with speed: %.2f", cmd_vel.linear.x);
+            cmd_vel.angular.z = 0.3 * heading_error;  // 方向保持的比例控制
+            ROS_DEBUG("Straight moving with speed: %.2f m/s, angular: %.2f rad/s",
+                     cmd_vel.linear.x, cmd_vel.angular.z);
         }
         cmd_vel_pub_.publish(cmd_vel);
     }
