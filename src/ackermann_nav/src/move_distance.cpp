@@ -71,21 +71,24 @@ public:
         // 获取当前绝对朝向
         double current_th = tf::getYaw(msg->pose.pose.orientation);
         // 计算与目标角度的差值（考虑初始朝向）
-        double target_absolute_angle = start_th_ + target_angle_;
+        double target_relative_angle = std::atan2(target_y, target_x);
+        double target_absolute_angle = start_th_ + target_relative_angle;
         double angle_diff = current_th - target_absolute_angle;
 
         // 标准化角度差到[-pi, pi]
-        while (angle_diff > M_PI) angle_diff -= 2 * M_PI;
-        while (angle_diff < -M_PI) angle_diff += 2 * M_PI;
+        angle_diff = fmod(angle_diff + M_PI, 2*M_PI) - M_PI;
 
         if (angle_first_ && !angle_finished_) {
-            // 修改判断条件为角度差接近0
-            if (fabs(angle_diff) < 0.05) {  // 改为判断绝对值
+            ROS_DEBUG("Current angle error: %.2f rad", angle_diff);
+            
+            // 增加最小角速度控制
+            if (fabs(angle_diff) < 0.05) {
                 angle_finished_ = true;
-                ROS_INFO("Rotation completed: %.2f radians", angle_diff);
+                ROS_INFO("Rotation completed");
             } else {
-                // 修改转向控制逻辑
-                move(true, angle_diff);
+                // 根据角度差动态调整角速度
+                double speed_factor = std::min(fabs(angle_diff)/0.5, 1.0);
+                move(true, angle_diff, speed_factor);
                 return;
             }
         }
@@ -114,15 +117,17 @@ public:
         }
     }
     
-    void move(bool rotating, double angle_error) {
+    void move(bool rotating, double angle_error, double speed_factor=1.0) {
         geometry_msgs::Twist cmd_vel;
         if (rotating) {
-            // 直接根据角度误差控制转向
-            cmd_vel.angular.z = (angle_error > 0 ? -1 : 1) * angular_speed_;  // 修正转向方向
+            // 优化转向控制：更平滑的角速度控制
+            cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
             cmd_vel.linear.x = 0.0;
+            ROS_DEBUG("Rotating with angular speed: %.2f", cmd_vel.angular.z);
         } else {
             cmd_vel.linear.x = linear_speed_;
             cmd_vel.angular.z = 0.0;
+            ROS_DEBUG("Moving forward with speed: %.2f", cmd_vel.linear.x);
         }
         cmd_vel_pub_.publish(cmd_vel);
     }
