@@ -38,10 +38,16 @@ public:
     }
     
     void setTargets(double target_x, double target_y) {
-        // 计算目标距离和角度
+        // 计算绝对距离和方向角度
         target_distance_ = std::sqrt(target_x * target_x + target_y * target_y);
         target_angle_ = std::atan2(target_y, target_x);
-        linear_speed_ = 0.2;  // 使用默认速度
+        
+        // 根据x坐标正负设置运动方向
+        linear_speed_ = (target_x >= 0) ? 0.2 : -0.2;  // 后退时速度为负
+        
+        // 当需要后退时关闭先转角度逻辑
+        angle_first_ = (target_x >= 0);  // 只有前进时需要先转向
+        
         ROS_INFO("Set targets: x = %.2f meters, y = %.2f meters", target_x, target_y);
         ROS_INFO("Calculated: distance = %.2f meters, angle = %.2f radians", target_distance_, target_angle_);
     }
