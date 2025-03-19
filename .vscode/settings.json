@@ -2,6 +2,29 @@
     "files.associations": {
         "MLTable": "yaml",
         "__node_handle": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "__bit_reference": "cpp",
+        "__hash_table": "cpp",
+        "__split_buffer": "cpp",
+        "algorithm": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "iterator": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp",
+        "ios": "cpp",
+        "istream": "cpp",
+        "locale": "cpp",
+        "optional": "cpp",
+        "ostream": "cpp",
+        "queue": "cpp",
+        "sstream": "cpp",
+        "stack": "cpp",
+        "string": "cpp",
+        "tuple": "cpp",
+        "unordered_map": "cpp",
+        "utility": "cpp",
+        "variant": "cpp",
+        "vector": "cpp"
     }
 }
