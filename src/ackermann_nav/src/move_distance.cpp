@@ -27,6 +27,8 @@ private:
     double target_x_;
     double target_y_;
     
+    double current_th_;
+    
 public:
     MoveDistance() : 
         target_x_(0.0), 
@@ -34,7 +36,8 @@ public:
         movement_started_(false), 
         goal_reached_(false), 
         angle_first_(true), 
-        angle_finished_(false) {
+        angle_finished_(false),
+        current_th_(0.0) {
         // 默认参数设置
         target_distance_ = 0.0;
         target_angle_ = 0.0;
@@ -82,11 +85,12 @@ public:
         }
         
         // 获取当前绝对朝向
-        double current_th = tf::getYaw(msg->pose.pose.orientation);
+        current_th_ = tf::getYaw(msg->pose.pose.orientation);
+
         // 计算与目标角度的差值（考虑初始朝向）
         double target_relative_angle = std::atan2(target_y_, target_x_);
         double target_absolute_angle = start_th_ + target_relative_angle;
-        double angle_diff = current_th - target_absolute_angle;
+        double angle_diff = current_th_ - target_absolute_angle;
 
         // 标准化角度差到[-pi, pi]
         angle_diff = fmod(angle_diff + M_PI, 2*M_PI) - M_PI;
@@ -143,7 +147,7 @@ public:
                      cmd_vel.linear.x, cmd_vel.angular.z);
         } else {
             // 直线阶段：正常速度+方向微调
-            double heading_error = target_angle_ - (current_th - start_th_);
+            double heading_error = target_angle_ - (current_th_ - start_th_);
             cmd_vel.linear.x = linear_speed_;
             cmd_vel.angular.z = 0.3 * heading_error;  // 方向保持的比例控制
             ROS_DEBUG("Straight moving with speed: %.2f m/s, angular: %.2f rad/s",
