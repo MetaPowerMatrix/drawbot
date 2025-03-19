@@ -135,7 +135,7 @@ public:
         if (rotating) {
             // 优化转向控制：更平滑的角速度控制
             cmd_vel.angular.z = (angle_error < 0 ? -1 : 1) * angular_speed_ * speed_factor;
-            cmd_vel.linear.x = 0.0;
+            cmd_vel.linear.x = 0.1;
             ROS_DEBUG("Rotating with angular speed: %.2f", cmd_vel.angular.z);
         } else {
             cmd_vel.linear.x = linear_speed_;
