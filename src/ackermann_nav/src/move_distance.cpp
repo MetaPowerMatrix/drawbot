@@ -68,21 +68,23 @@ public:
             ROS_INFO("Starting movement, initial position: (%.2f, %.2f), heading: %.2f", start_x_, start_y_, start_th_);
         }
         
-        // 获取当前朝向
+        // 获取当前绝对朝向
         double current_th = tf::getYaw(msg->pose.pose.orientation);
-        double angle_diff = current_th - start_th_;
-        
+        // 计算与目标角度的差值（考虑初始朝向）
+        double target_absolute_angle = start_th_ + target_angle_;
+        double angle_diff = current_th - target_absolute_angle;
+
         // 标准化角度差到[-pi, pi]
         while (angle_diff > M_PI) angle_diff -= 2 * M_PI;
         while (angle_diff < -M_PI) angle_diff += 2 * M_PI;
-        
+
         if (angle_first_ && !angle_finished_) {
-            // 先完成转向
-            if (fabs(angle_diff - target_angle_) < 0.05) {
+            // 修改判断条件为角度差接近0
+            if (fabs(angle_diff) < 0.05) {  // 改为判断绝对值
                 angle_finished_ = true;
                 ROS_INFO("Rotation completed: %.2f radians", angle_diff);
             } else {
-                // 继续转向
+                // 修改转向控制逻辑
                 move(true, angle_diff);
                 return;
             }
@@ -112,13 +114,11 @@ public:
         }
     }
     
-    void move(bool rotating, double current_angle_diff) {
+    void move(bool rotating, double angle_error) {
         geometry_msgs::Twist cmd_vel;
         if (rotating) {
-            // 计算剩余需要转向的角度
-            double remaining_angle = target_angle_ - current_angle_diff;
-            // 根据剩余角度确定转向方向和速度
-            cmd_vel.angular.z = (remaining_angle > 0 ? 1 : -1) * angular_speed_;
+            // 直接根据角度误差控制转向
+            cmd_vel.angular.z = (angle_error > 0 ? -1 : 1) * angular_speed_;  // 修正转向方向
             cmd_vel.linear.x = 0.0;
         } else {
             cmd_vel.linear.x = linear_speed_;
