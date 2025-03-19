@@ -204,7 +204,18 @@ public:
                      cmd_vel.linear.x, cmd_vel.angular.z);
         } else {
             // 直线阶段：正常速度+方向微调
-            double heading_error = target_angle_ - (current_th_ - start_th_);
+            double heading_error;
+            if (linear_speed_ < 0) {
+                // 后退时，直接计算当前朝向与目标角度的差值
+                heading_error = target_angle_ - current_th_;
+            } else {
+                // 前进时，使用原有公式
+                heading_error = target_angle_ - (current_th_ - start_th_);
+            }
+            
+            // 标准化角度差到[-pi, pi]
+            heading_error = fmod(heading_error + M_PI, 2*M_PI) - M_PI;
+            
             cmd_vel.linear.x = linear_speed_;
             cmd_vel.angular.z = 0.3 * heading_error;  // 方向保持的比例控制
             ROS_DEBUG("Straight moving with speed: %.2f m/s, angular: %.2f rad/s",
