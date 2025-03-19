@@ -24,8 +24,17 @@ private:
     bool angle_first_;
     bool angle_finished_;
     
+    double target_x_;
+    double target_y_;
+    
 public:
-    MoveDistance() : movement_started_(false), goal_reached_(false), angle_first_(true), angle_finished_(false) {
+    MoveDistance() : 
+        target_x_(0.0), 
+        target_y_(0.0),
+        movement_started_(false), 
+        goal_reached_(false), 
+        angle_first_(true), 
+        angle_finished_(false) {
         // 默认参数设置
         target_distance_ = 0.0;
         target_angle_ = 0.0;
@@ -38,6 +47,10 @@ public:
     }
     
     void setTargets(double target_x, double target_y) {
+        // 保存目标坐标到成员变量
+        target_x_ = target_x;
+        target_y_ = target_y;
+        
         // 计算绝对距离和方向角度
         target_distance_ = std::sqrt(target_x * target_x + target_y * target_y);
         target_angle_ = std::atan2(target_y, target_x);
@@ -71,7 +84,7 @@ public:
         // 获取当前绝对朝向
         double current_th = tf::getYaw(msg->pose.pose.orientation);
         // 计算与目标角度的差值（考虑初始朝向）
-        double target_relative_angle = std::atan2(target_y, target_x);
+        double target_relative_angle = std::atan2(target_y_, target_x_);
         double target_absolute_angle = start_th_ + target_relative_angle;
         double angle_diff = current_th - target_absolute_angle;
 
@@ -121,7 +134,7 @@ public:
         geometry_msgs::Twist cmd_vel;
         if (rotating) {
             // 优化转向控制：更平滑的角速度控制
-            cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
+            cmd_vel.angular.z = (angle_error < 0 ? -1 : 1) * angular_speed_ * speed_factor;
             cmd_vel.linear.x = 0.0;
             ROS_DEBUG("Rotating with angular speed: %.2f", cmd_vel.angular.z);
         } else {
