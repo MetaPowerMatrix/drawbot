@@ -3,6 +3,51 @@
 #include <nav_msgs/Odometry.h>
 #include <tf/tf.h>
 #include <cmath>
+#include <fstream>  // 添加串口操作支持
+#include <unistd.h> // 添加usleep支持
+
+class ArmController {
+private:
+    std::ofstream serial_port;
+    bool is_connected;
+
+public:
+    ArmController() : is_connected(false) {
+        // 尝试打开串口
+        serial_port.open("/dev/ttyUSB0");
+        if (serial_port.is_open()) {
+            is_connected = true;
+            ROS_INFO("Arm controller connected to /dev/ttyUSB0");
+        } else {
+            ROS_WARN("Failed to open /dev/ttyUSB0 for arm control");
+        }
+    }
+
+    ~ArmController() {
+        if (is_connected) {
+            serial_port.close();
+        }
+    }
+
+    void sendCommand(const std::string& command) {
+        if (!is_connected) return;
+        
+        serial_port << command << std::endl;
+        usleep(100000);  // 等待100ms确保指令发送完成
+        ROS_DEBUG("Sent arm command: %s", command.c_str());
+    }
+
+    void prepareArm() {
+        sendCommand("H");
+        sendCommand("x+30");
+        sendCommand("y+15");
+        sendCommand("z-36");
+    }
+
+    void resetArm() {
+        sendCommand("H");
+    }
+};
 
 class MoveDistance {
 private:
@@ -29,6 +74,9 @@ private:
     
     double current_th_;
     
+    // 添加机械臂控制器
+    ArmController arm_controller;
+    
 public:
     MoveDistance() : 
         target_x_(0.0), 
@@ -47,6 +95,9 @@ public:
         // 创建发布者和订阅者
         cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
+        
+        // 小车启动前准备机械臂
+        arm_controller.prepareArm();
     }
     
     void setTargets(double target_x, double target_y) {
@@ -161,6 +212,9 @@ public:
         cmd_vel.linear.x = 0.0;
         cmd_vel.angular.z = 0.0;
         cmd_vel_pub_.publish(cmd_vel);
+        
+        // 小车停止后重置机械臂
+        arm_controller.resetArm();
     }
     
     bool isGoalReached() {
