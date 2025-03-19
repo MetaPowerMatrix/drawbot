@@ -105,18 +105,24 @@ public:
         target_x_ = target_x;
         target_y_ = target_y;
         
-        // 计算绝对距离和方向角度
-        target_distance_ = std::sqrt(target_x * target_x + target_y * target_y);
-        target_angle_ = std::atan2(target_y, target_x);
+        // 处理x为负且y为0的特殊情况
+        if (target_x < 0 && fabs(target_y) < 1e-6) {
+            target_angle_ = M_PI;  // 正后方
+            angle_first_ = false;  // 不需要先转向
+            linear_speed_ = -0.2;  // 后退速度
+        } else {
+            // 正常计算角度和距离
+            target_angle_ = std::atan2(target_y, target_x);
+            angle_first_ = (target_x >= 0);  // 只有前进时需要先转向
+            linear_speed_ = (target_x >= 0) ? 0.2 : -0.2;
+        }
         
-        // 根据x坐标正负设置运动方向
-        linear_speed_ = (target_x >= 0) ? 0.2 : -0.2;  // 后退时速度为负
+        // 计算绝对距离
+        target_distance_ = std::sqrt(target_x_ * target_x_ + target_y_ * target_y_);
         
-        // 当需要后退时关闭先转角度逻辑
-        angle_first_ = (target_x >= 0);  // 只有前进时需要先转向
-        
-        ROS_INFO("Set targets: x = %.2f meters, y = %.2f meters", target_x, target_y);
+        ROS_INFO("Set targets: x = %.2f meters, y = %.2f meters", target_x_, target_y_);
         ROS_INFO("Calculated: distance = %.2f meters, angle = %.2f radians", target_distance_, target_angle_);
+        ROS_INFO("Movement mode: %s", angle_first_ ? "Turn then move" : "Direct move");
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
