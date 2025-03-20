@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(ackermann_nav)
 
+# 添加TinyXML2依赖
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(TINYXML2 REQUIRED tinyxml2)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
@@ -11,7 +15,6 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   ackermann_msgs
   serial
-  tinyxml2
 )
 
 catkin_package(
@@ -24,12 +27,12 @@ catkin_package(
     nav_msgs
     tf
     ackermann_msgs
-    tinyxml2
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${TINYXML2_INCLUDE_DIRS}  # 添加TinyXML2头文件路径
 )
 
 add_executable(ackermann_controller src/ackermann_controller.cpp)
@@ -39,7 +42,10 @@ add_executable(path_follower src/path_follower.cpp)
 target_link_libraries(path_follower ${catkin_LIBRARIES})
 
 add_executable(move_distance src/move_distance.cpp)
-target_link_libraries(move_distance ${catkin_LIBRARIES})
+target_link_libraries(move_distance 
+  ${catkin_LIBRARIES}
+  ${TINYXML2_LIBRARIES}  # 添加TinyXML2库链接
+)
 
 add_executable(motor_test src/motor_test.cpp)
 target_link_libraries(motor_test ${catkin_LIBRARIES})
