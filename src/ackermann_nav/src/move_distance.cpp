@@ -41,7 +41,7 @@ public:
         sendCommand("H");
         sendCommand("x+30");
         sendCommand("y+15");
-        sendCommand("z-36");
+        sendCommand("z-40");
     }
 
     void resetArm() {
@@ -207,14 +207,14 @@ public:
             double heading_error;
             if (linear_speed_ < 0) {
                 // 后退时，直接计算当前朝向与目标角度的差值
-                heading_error = target_angle_ - current_th_;
+                // heading_error = target_angle_ - current_th_;
+                heading_error = 0;
             } else {
                 // 前进时，使用原有公式
                 heading_error = target_angle_ - (current_th_ - start_th_);
-            }
-            
-            // 标准化角度差到[-pi, pi]
-            heading_error = fmod(heading_error + M_PI, 2*M_PI) - M_PI;
+                // 标准化角度差到[-pi, pi]
+                heading_error = fmod(heading_error + M_PI, 2*M_PI) - M_PI;
+            }            
             
             cmd_vel.linear.x = linear_speed_;
             cmd_vel.angular.z = 0.3 * heading_error;  // 方向保持的比例控制
