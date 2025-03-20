@@ -196,7 +196,7 @@ public:
         geometry_msgs::Twist cmd_vel;
         if (rotating) {
             // 转向阶段：小速度前进+转向
-            cmd_vel.linear.x = 0.05;  // 转向时的小前进速度
+            cmd_vel.linear.x = 0.02;  // 转向时的小前进速度
             cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
             ROS_DEBUG("Steering with speed: %.2f m/s, angular: %.2f rad/s", 
                      cmd_vel.linear.x, cmd_vel.angular.z);
