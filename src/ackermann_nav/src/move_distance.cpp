@@ -274,6 +274,9 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
     tinyxml2::XMLError result = doc.LoadFile(file_path.c_str());
     if (result != tinyxml2::XML_SUCCESS) {
         ROS_ERROR("Failed to load route file: %s (Error code: %d)", file_path.c_str(), result);
+        // 打印更详细的错误信息
+        const char* errorStr1 = doc.ErrorStr();
+        ROS_ERROR("XML Error description: %s", errorStr1);
         return targets;
     }
 
@@ -304,11 +307,16 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
             // 更健壮的draw属性获取
             const char* draw_attr = linept->Attribute("draw");
             if (draw_attr) {
-                // 将字符串转换为小写以便比较
+                // 直接检查属性是否包含"true"字符串，不考虑引号或等号
                 std::string draw_str = draw_attr;
+                // 打印原始属性值以便调试
+                ROS_DEBUG("Found draw attribute with raw value: '%s'", draw_attr);
+                
+                // 将字符串转换为小写以便比较
                 std::transform(draw_str.begin(), draw_str.end(), draw_str.begin(), ::tolower);
-                point.draw = (draw_str == "true");
-                ROS_DEBUG("Found draw attribute: %s", draw_attr);
+                
+                // 检查是否包含"true"字符串，接受多种可能的格式
+                point.draw = (draw_str.find("true") != std::string::npos);
             } else {
                 ROS_WARN("Missing 'draw' attribute for point (%.2f, %.2f), defaulting to false", point.x, point.y);
                 point.draw = false;
