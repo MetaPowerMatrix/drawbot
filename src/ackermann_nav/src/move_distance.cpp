@@ -267,22 +267,31 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
     std::vector<TargetPoint> targets;
     tinyxml2::XMLDocument doc;
     
-    if (doc.LoadFile(file_path.c_str()) != tinyxml2::XML_SUCCESS) {
-        ROS_ERROR("Failed to load route file: %s", file_path.c_str());
+    // 打印文件路径，便于调试
+    ROS_INFO("Attempting to load route file: %s", file_path.c_str());
+    
+    // 打开文件并检查错误
+    tinyxml2::XMLError result = doc.LoadFile(file_path.c_str());
+    if (result != tinyxml2::XML_SUCCESS) {
+        ROS_ERROR("Failed to load route file: %s (Error code: %d)", file_path.c_str(), result);
         return targets;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("SignDrawInfo");
     if (!root) {
-        ROS_ERROR("Invalid route file format: missing SignDrawInfo");
+        ROS_ERROR("Invalid route file format: missing SignDrawInfo element");
         return targets;
     }
 
     // 遍历每个DrawStep
     for (tinyxml2::XMLElement* step = root->FirstChildElement("DrawStep"); step; step = step->NextSiblingElement("DrawStep")) {
+        // 获取DrawStep的属性，便于调试
+        int seqno = step->IntAttribute("seqno", -1);
+        ROS_DEBUG("Processing DrawStep with seqno: %d", seqno);
+        
         tinyxml2::XMLElement* linepts = step->FirstChildElement("linepts");
         if (!linepts) {
-            ROS_WARN("DrawStep without linepts found, skipping");
+            ROS_WARN("DrawStep without linepts found (seqno: %d), skipping", seqno);
             continue;
         }
         
@@ -291,8 +300,19 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
             TargetPoint point;
             point.x = linept->DoubleAttribute("x");
             point.y = linept->DoubleAttribute("y");
+            
+            // 更健壮的draw属性获取
             const char* draw_attr = linept->Attribute("draw");
-            point.draw = (draw_attr && strcmp(draw_attr, "true") == 0);
+            if (draw_attr) {
+                // 将字符串转换为小写以便比较
+                std::string draw_str = draw_attr;
+                std::transform(draw_str.begin(), draw_str.end(), draw_str.begin(), ::tolower);
+                point.draw = (draw_str == "true");
+                ROS_DEBUG("Found draw attribute: %s", draw_attr);
+            } else {
+                ROS_WARN("Missing 'draw' attribute for point (%.2f, %.2f), defaulting to false", point.x, point.y);
+                point.draw = false;
+            }
             
             targets.push_back(point);
             ROS_INFO("Added target point: (%.2f, %.2f), draw=%s", 
