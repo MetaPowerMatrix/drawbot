@@ -1,78 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <SignDrawInfo>
-  <DrawStep seqno="1" direction="-152.602565985831" length="164.684546937471" startx="-74" starty="438">
-    <canvasinfo x1="426" x2="465" y1="262" y2="102" />
-    <maskinfo maskx="466" masky="204" maskx1="468" masky1="102" mask_direction="-1.55119099593769" />
+  <DrawStep seqno="1" direction="0" length="1" startx="0" starty="0">
     <linepts>
-      <linept x="426" y="262" />
-      <linept x="465" y="102" />
-      <linept x="480" y="106" />
-      <linept x="441" y="266" />
-      <linept x="426" y="262" />
-      <linept x="426" y="262" />
+      <linept x="1" y="0" draw=true/>
     </linepts>
-    <maskedpts>
-      <linept x="426" y="262" />
-      <linept x="465" y="102" />
-      <linept x="468" y="103" />
-      <linept x="467" y="160" />
-      <linept x="441" y="266" />
-      <linept x="426" y="262" />
-    </maskedpts>
   </DrawStep>
-  <DrawStep seqno="2" direction="511.03646135775" length="155.955121749816" startx="-34" starty="288">
-    <canvasinfo x1="466" x2="427" y1="412" y2="261" />
-    <maskinfo maskx="465" masky="414" maskx1="468" masky1="102" mask_direction="-1.56118123849519" />
+  <DrawStep seqno="2" direction="3.14/4" length="0.5" startx="1" starty="0">
     <linepts>
-      <linept x="466" y="412" />
-      <linept x="427" y="261" />
-      <linept x="442" y="257" />
-      <linept x="481" y="408" />
-      <linept x="466" y="412" />
-      <linept x="466" y="412" />
+      <linept x="0.5" y="0.5" draw=true/>
+      <linept x="1" y="0" draw=false/>
     </linepts>
-    <maskedpts>
-      <linept x="465" y="408" />
-      <linept x="427" y="261" />
-      <linept x="442" y="257" />
-      <linept x="466" y="349" />
-      <linept x="465" y="408" />
-    </maskedpts>
   </DrawStep>
-  <DrawStep seqno="3" direction="539.692784760101" length="373.001340480165" startx="60" starty="0">
-    <canvasinfo x1="560" x2="559" y1="700" y2="327" />
-    <maskinfo maskx="466" masky="204" maskx1="468" masky1="102" mask_direction="-1.55119099593769" />
+  <DrawStep seqno="3" direction="3.14/4" length="0.5" startx="1" starty="0">
     <linepts>
-      <linept x="560" y="700" />
-      <linept x="559" y="327" />
-      <linept x="574" y="327" />
-      <linept x="575" y="700" />
-      <linept x="560" y="700" />
+      <linept x="0.5" y="0.5" draw=true/>
+      <linept x="1" y="0" draw=false/>
     </linepts>
-    <maskedpts>
-      <linept x="560" y="700" />
-      <linept x="559" y="327" />
-      <linept x="574" y="327" />
-      <linept x="575" y="700" />
-      <linept x="560" y="700" />
-    </maskedpts>
-  </DrawStep>
-  <DrawStep seqno="4" direction="-180" length="391" startx="46" starty="0">
-    <canvasinfo x1="546" x2="546" y1="700" y2="309" />
-    <maskinfo maskx="466" masky="204" maskx1="468" masky1="102" mask_direction="-1.55119099593769" />
-    <linepts>
-      <linept x="546" y="700" />
-      <linept x="546" y="309" />
-      <linept x="561" y="309" />
-      <linept x="561" y="700" />
-      <linept x="546" y="700" />
-    </linepts>
-    <maskedpts>
-      <linept x="546" y="700" />
-      <linept x="546" y="309" />
-      <linept x="561" y="309" />
-      <linept x="561" y="700" />
-      <linept x="546" y="700" />
-    </maskedpts>
   </DrawStep>
 </SignDrawInfo>

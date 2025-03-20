@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>  // 添加串口操作支持
 #include <unistd.h> // 添加usleep支持
+#include <tinyxml2.h> // 添加XML解析支持
 
 class ArmController {
 private:
@@ -95,9 +96,6 @@ public:
         // 创建发布者和订阅者
         cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
-        
-        // 小车启动前准备机械臂
-        arm_controller.prepareArm();
     }
     
     void setTargets(double target_x, double target_y) {
@@ -237,31 +235,120 @@ public:
     bool isGoalReached() {
         return goal_reached_;
     }
+    
+    void reset() {
+        // 重置移动状态，为下一个目标点做准备
+        movement_started_ = false;
+        goal_reached_ = false;
+        angle_finished_ = false;
+    }
+    
+    // 添加机械臂控制方法
+    void controlArm(bool draw) {
+        if (draw) {
+            arm_controller.prepareArm();
+            ROS_INFO("Preparing arm for drawing");
+        } else {
+            arm_controller.resetArm();
+            ROS_INFO("Resetting arm after drawing");
+        }
+    }
 };
+
+// 定义目标点结构体
+struct TargetPoint {
+    double x;
+    double y;
+    bool draw;
+};
+
+// 解析XML文件，获取目标点集合
+std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
+    std::vector<TargetPoint> targets;
+    tinyxml2::XMLDocument doc;
+    
+    if (doc.LoadFile(file_path.c_str()) != tinyxml2::XML_SUCCESS) {
+        ROS_ERROR("Failed to load route file: %s", file_path.c_str());
+        return targets;
+    }
+
+    tinyxml2::XMLElement* root = doc.FirstChildElement("SignDrawInfo");
+    if (!root) {
+        ROS_ERROR("Invalid route file format: missing SignDrawInfo");
+        return targets;
+    }
+
+    // 遍历每个DrawStep
+    for (tinyxml2::XMLElement* step = root->FirstChildElement("DrawStep"); step; step = step->NextSiblingElement("DrawStep")) {
+        tinyxml2::XMLElement* linepts = step->FirstChildElement("linepts");
+        if (!linepts) {
+            ROS_WARN("DrawStep without linepts found, skipping");
+            continue;
+        }
+        
+        // 遍历每个linept
+        for (tinyxml2::XMLElement* linept = linepts->FirstChildElement("linept"); linept; linept = linept->NextSiblingElement("linept")) {
+            TargetPoint point;
+            point.x = linept->DoubleAttribute("x");
+            point.y = linept->DoubleAttribute("y");
+            const char* draw_attr = linept->Attribute("draw");
+            point.draw = (draw_attr && strcmp(draw_attr, "true") == 0);
+            
+            targets.push_back(point);
+            ROS_INFO("Added target point: (%.2f, %.2f), draw=%s", 
+                    point.x, point.y, point.draw ? "true" : "false");
+        }
+    }
+
+    ROS_INFO("Parsed %lu target points from route file", targets.size());
+    return targets;
+}
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "move_distance");
     
-    if (argc != 3) {
-        ROS_ERROR("Usage: %s <target_x(meters)> <target_y(meters)>", argv[0]);
+    if (argc != 2) {
+        ROS_ERROR("Usage: %s <route_file_path>", argv[0]);
         return 1;
     }
     
-    // 解析命令行参数
-    double target_x = std::atof(argv[1]);
-    double target_y = std::atof(argv[2]);
+    // 解析路由文件
+    std::string route_file = argv[1];
+    std::vector<TargetPoint> targets = parseRouteFile(route_file);
+    if (targets.empty()) {
+        ROS_ERROR("No valid target points found in route file");
+        return 1;
+    }
     
     MoveDistance move_controller;
-    move_controller.setTargets(target_x, target_y);
     
     // 等待1秒钟让ROS系统完全初始化
     ros::Duration(1.0).sleep();
     
-    ros::Rate rate(10);
-    while (ros::ok() && !move_controller.isGoalReached()) {
-        ros::spinOnce();
-        rate.sleep();
+    // 按顺序处理每个目标点
+    for (size_t i = 0; i < targets.size(); ++i) {
+        const auto& target = targets[i];
+        ROS_INFO("Moving to target point %lu: (%.2f, %.2f)", i+1, target.x, target.y);
+        
+        // 根据draw属性控制机械臂
+        move_controller.controlArm(target.draw);
+        
+        // 设置目标点并开始移动
+        move_controller.setTargets(target.x, target.y);
+        
+        // 等待小车到达目标点
+        ros::Rate rate(10);
+        while (ros::ok() && !move_controller.isGoalReached()) {
+            ros::spinOnce();
+            rate.sleep();
+        }
+        
+        // 重置移动状态，为下一个目标点做准备
+        if (i < targets.size() - 1) {
+            move_controller.reset();
+        }
     }
     
+    ROS_INFO("All target points reached");
     return 0;
 }

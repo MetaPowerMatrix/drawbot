@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   ackermann_msgs
   serial
+  tinyxml2
 )
 
 catkin_package(
@@ -23,6 +24,7 @@ catkin_package(
     nav_msgs
     tf
     ackermann_msgs
+    tinyxml2
 )
 
 include_directories(
