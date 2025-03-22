@@ -15,6 +15,7 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include "odom_updater.h"
 
 class AckermannController {
 private:
@@ -47,8 +48,11 @@ private:
     std::thread monitor_thread_;
     std::mutex serial_mutex_;
 
+    // 里程计更新器
+    OdomUpdater odom_updater_;
+
 public:
-    AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0), is_shutting_down_(false) {
+    AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0), is_shutting_down_(false), odom_updater_(nh_) {
         nh_.param<double>("wheelbase", wheelbase_, 0.25);
         nh_.param<double>("max_steering_angle", max_steering_angle_, 0.6);
         nh_.param<double>("max_speed", max_speed_, 1.0);
@@ -283,91 +287,24 @@ public:
                 ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(dynamic_frame[i]) << " ";
             }
             ROS_INFO("Sent frame to controller (binary): %s", ss.str().c_str());
-
-            // Wait for response
-            // ros::Duration(0.1).sleep();
-            
-            // Read response
-            // if (serial_port_.available() >= 24) {
-            //     std::vector<uint8_t> response(24);
-            //     size_t bytes_read = serial_port_.read(response.data(), 24);
-                
-            //     if (bytes_read == 24) {
-            //         std::stringstream ss_resp;
-            //         for (size_t i = 0; i < bytes_read; ++i) {
-            //             ss_resp << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(response[i]) << " ";
-            //         }
-            //         ROS_INFO("Controller sync response (raw): %s", ss_resp.str().c_str());
-            //         parseUplinkFrame(response);
-            //     } else {
-            //         ROS_WARN("No sync response or incomplete response from controller.");
-            //     }
-            // }
         } catch (const std::exception& e) {
             ROS_ERROR("Serial write or read error: %s", e.what());
         }
     }
 
     void timerCallback(const ros::TimerEvent&) {
-        updateOdometry(last_v_, last_steering_angle_);
+        // 使用OdomUpdater更新里程计
+        odom_updater_.update(last_v_, last_steering_angle_);
     }
 
-    void updateOdometry(double v, double steering_angle) {
-        // Increment counter
-        odom_log_counter_++;
-        
-        // Only print detailed logs at specified intervals
-        bool should_log = (odom_log_counter_ % ODOM_LOG_INTERVAL == 0);
-        
-        ros::Time current_time = ros::Time::now();
-        double dt = (current_time - last_time_).toSec();
-
-        // Update robot pose
-        double delta_x = v * cos(th_) * dt;
-        double delta_y = v * sin(th_) * dt;
-        double delta_th = v * tan(steering_angle) / wheelbase_ * dt;
-
-        x_ += delta_x;
-        y_ += delta_y;
-        th_ += delta_th;
-
-        if (should_log) {
-        ROS_INFO("Odometry update: dt=%.3f, dx=%.3f, dy=%.3f, dth=%.3f",
-                 dt, delta_x, delta_y, delta_th);
-        ROS_INFO("Current pose: x=%.3f, y=%.3f, th=%.3f",
-                 x_, y_, th_);
-        }
-
-        // Publish tf transform
-        geometry_msgs::TransformStamped odom_trans;
-        odom_trans.header.stamp = current_time;
-        odom_trans.header.frame_id = "odom";
-        odom_trans.child_frame_id = "base_link";
-        odom_trans.transform.translation.x = x_;
-        odom_trans.transform.translation.y = y_;
-        odom_trans.transform.translation.z = 0.0;
-        odom_trans.transform.rotation = tf::createQuaternionMsgFromYaw(th_);
-        odom_broadcaster_.sendTransform(odom_trans);
-
-        // Publish odometry message
-        nav_msgs::Odometry odom;
-        odom.header.stamp = current_time;
-        odom.header.frame_id = "odom";
-        odom.child_frame_id = "base_link";
-        odom.pose.pose.position.x = x_;
-        odom.pose.pose.position.y = y_;
-        odom.pose.pose.position.z = 0.0;
-        odom.pose.pose.orientation = tf::createQuaternionMsgFromYaw(th_);
-        odom.twist.twist.linear.x = v;
-        odom.twist.twist.angular.z = v * tan(steering_angle) / wheelbase_;
-        odom_pub_.publish(odom);
-
-        last_time_ = current_time;
-        
-        // Prevent counter overflow
-        if (odom_log_counter_ > 10000) {
-            odom_log_counter_ = 0;
-        }
+    // 新增方法：获取当前位姿
+    void getCurrentPose(double& x, double& y, double& th) {
+        odom_updater_.getPose(x, y, th);
+    }
+    
+    // 新增方法：获取当前速度
+    void getCurrentVelocity(double& vx, double& vy, double& omega) {
+        odom_updater_.getVelocity(vx, vy, omega);
     }
 
     void shutdown() {

@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-    <!-- 启动底层控制器节点(如果有) -->
-    <!-- <node pkg="your_motor_driver_pkg" type="your_motor_driver_node" name="motor_driver" output="screen" /> -->
-    
-    <!-- 启动测试节点 -->
-    <node pkg="ackermann_nav" type="motor_test" name="motor_test" output="screen" />
-</launch> 

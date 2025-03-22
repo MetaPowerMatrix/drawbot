@@ -35,8 +35,11 @@ include_directories(
   ${TINYXML2_INCLUDE_DIRS}  # 添加TinyXML2头文件路径
 )
 
+add_library(odom_updater src/odom_updater.cpp)
+target_link_libraries(odom_updater ${catkin_LIBRARIES})
+
 add_executable(ackermann_controller src/ackermann_controller.cpp)
-target_link_libraries(ackermann_controller ${catkin_LIBRARIES})
+target_link_libraries(ackermann_controller odom_updater ${catkin_LIBRARIES})
 
 add_executable(path_follower src/path_follower.cpp)
 target_link_libraries(path_follower ${catkin_LIBRARIES})
