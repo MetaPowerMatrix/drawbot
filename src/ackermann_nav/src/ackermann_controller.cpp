@@ -51,6 +51,9 @@ private:
     // 里程计更新器
     OdomUpdater odom_updater_;
 
+    double getBatteryVoltage() const;
+    uint8_t getStopFlag() const;
+
 public:
     AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0), is_shutting_down_(false), odom_updater_(nh_) {
         nh_.param<double>("wheelbase", wheelbase_, 0.25);
@@ -77,7 +80,7 @@ public:
         }
 
         // Start monitoring thread
-        // startMonitoring();
+        startMonitoring();
 
         ackermann_cmd_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
             "ackermann_cmd", 10);
@@ -98,76 +101,66 @@ public:
     }
 
     void startMonitoring() {
+        ROS_INFO("启动数据流监控线程");
         monitor_thread_ = std::thread([this]() {
+            std::vector<uint8_t> buffer;
+            const size_t READ_SIZE = 128; // 每次尝试读取的字节数
+            buffer.reserve(READ_SIZE);
+            
             while (!is_shutting_down_) {
                 try {
-                    std::lock_guard<std::mutex> lock(serial_mutex_);
                     if (serial_port_.isOpen()) {
                         size_t bytes_available = serial_port_.available();
-                        if (bytes_available >= 24) {
-                            std::vector<uint8_t> response(24);
-                            size_t bytes_read = serial_port_.read(response.data(), 24);
+                        
+                        // 只有当有数据可读时才进行读取
+                        if (bytes_available > 0) {
+                            // 每次读取最多READ_SIZE字节的数据
+                            size_t bytes_to_read = std::min(bytes_available, READ_SIZE);
+                            buffer.resize(bytes_to_read);
                             
-                            if (bytes_read == 24 && !is_shutting_down_) {
-                                std::stringstream ss;
-                                for (size_t i = 0; i < bytes_read; ++i) {
-                                    ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(response[i]) << " ";
-                                }
-                                ROS_INFO("Controller async response (raw): %s", ss.str().c_str());
-                                parseUplinkFrame(response);
+                            {
+                                std::lock_guard<std::mutex> lock(serial_mutex_);
+                                size_t bytes_read = serial_port_.read(buffer.data(), bytes_to_read);
+                                buffer.resize(bytes_read); // 调整为实际读取的大小
                             }
-                        } else {
-                            ROS_DEBUG_THROTTLE(5.0, "Incomplete or no async response from controller.");
+                            
+                            if (!buffer.empty() && !is_shutting_down_) {
+                                // 使用OdomUpdater处理数据流
+                                bool processed = odom_updater_.processControllerDataStream(buffer);
+                                
+                                // 调试日志（每5秒最多输出一次）
+                                if (processed) {
+                                    ROS_DEBUG_THROTTLE(5.0, "处理了%zu字节的控制器数据流", buffer.size());
+                                }
+                            }
                         }
                     }
                 } catch (const std::exception& e) {
                     if (!is_shutting_down_) {
-                        ROS_ERROR_THROTTLE(1.0, "Serial read error (async): %s", e.what());
+                        ROS_ERROR_THROTTLE(1.0, "数据流监控线程出错: %s", e.what());
+                        
+                        // 尝试重新打开串口
+                        try {
+                            std::lock_guard<std::mutex> lock(serial_mutex_);
+                            if (!serial_port_.isOpen()) {
+                                ROS_WARN("尝试重新打开串口...");
+                                serial_port_.open();
+                                if (serial_port_.isOpen()) {
+                                    ROS_INFO("串口重新打开成功");
+                                }
+                            }
+                        } catch (const std::exception& e2) {
+                            ROS_ERROR("重新打开串口失败: %s", e2.what());
+                        }
                     }
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                
+                // 短暂睡眠以避免CPU占用过高
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            
+            ROS_INFO("数据流监控线程已终止");
         });
-    }
-
-    void parseUplinkFrame(const std::vector<uint8_t>& data) {
-        // Parse 24-byte uplink frame (0x7B header, 0x7D tail)
-        if (data.size() != 24 || data[0] != 0x7B || data[23] != 0x7D) {
-            ROS_ERROR("Invalid uplink frame format.");
-            return;
-        }
-
-        // Extract flag_stop (byte 1)
-        uint8_t flag_stop = data[1];
-        ROS_INFO("Flag (byte 1): %d", flag_stop);
-
-        // Extract velocities (short, big-endian)
-        int16_t x_linear = (data[2] << 8) | data[3];
-        int16_t y_linear = (data[4] << 8) | data[5];
-        int16_t z_linear = (data[6] << 8) | data[7];
-        int16_t x_angular = (data[8] << 8) | data[9];
-        int16_t y_angular = (data[10] << 8) | data[11];
-        int16_t z_angular = (data[12] << 8) | data[13];
-
-        // Scale back to physical units (reverse of scale = 10000.0)
-        double scale = 10000.0;
-        ROS_INFO("X Linear Velocity: %.4f m/s", x_linear / scale);
-        ROS_INFO("Y Linear Velocity: %.4f m/s", y_linear / scale);
-        ROS_INFO("Z Linear Velocity: %.4f m/s", z_linear / scale);
-        ROS_INFO("X Angular Velocity: %.4f rad/s", x_angular / scale);
-        ROS_INFO("Y Angular Velocity: %.4f rad/s", y_angular / scale);
-        ROS_INFO("Z Angular Velocity: %.4f rad/s", z_angular / scale);
-
-        // Extract odometry (bytes 14-19, shorts)
-        int16_t odom1 = (data[14] << 8) | data[15];
-        int16_t odom2 = (data[16] << 8) | data[17];
-        ROS_INFO("Odometer 1: %d", odom1);
-        ROS_INFO("Odometer 2: %d", odom2);
-
-        // Checksum (byte 21, optional verification)
-        uint8_t checksum = data[21];
-        uint8_t calculated_checksum = calculateChecksum(data, 0, data.size() - 3);  // Exclude checksum and tail
-        ROS_INFO("Received Checksum: %02x, Calculated Checksum: %02x", checksum, calculated_checksum);
     }
 
     std::vector<uint8_t> createFrame(double linear_x, double angular_z) {
@@ -360,7 +353,8 @@ public:
                                 ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(response[i]) << " ";
                             }
                             ROS_INFO("Controller sync response after stop (raw): %s", ss.str().c_str());
-                            parseUplinkFrame(response);
+                            // 处理最后一帧数据
+                            odom_updater_.processControllerDataStream(response);
                         } else {
                             ROS_WARN("No sync response or incomplete response from controller after stop.");
                         }
@@ -382,6 +376,14 @@ public:
         }
         
         is_shutting_down_ = false;
+    }
+
+    double getBatteryVoltage() const {
+        return odom_updater_.getBatteryVoltage();
+    }
+
+    uint8_t getStopFlag() const {
+        return odom_updater_.getStopFlag();
     }
 };
 

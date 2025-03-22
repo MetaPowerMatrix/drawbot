@@ -7,9 +7,18 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <vector>
+#include <cstdint>
+#include <queue>
+#include <deque>
 
 // 定义里程计日志输出间隔（每多少次更新输出一次详细日志）
 #define ODOM_LOG_INTERVAL 100
+
+// 帧头和帧尾标识
+#define FRAME_HEADER 0x7B
+#define FRAME_TAIL 0x7D
+#define FRAME_SIZE 24  // 上行数据帧大小为24字节
 
 /**
  * @brief 里程计更新器类，负责处理里程计数据的计算和发布
@@ -25,6 +34,7 @@ public:
     enum OdomMethod {
         ENCODER_ONLY,  ///< 仅使用编码器数据
         IMU_FUSION,    ///< 融合IMU数据
+        CONTROLLER_DATA, ///< 使用控制器上行数据
         CUSTOM_METHOD  ///< 自定义方法
     };
 
@@ -40,6 +50,20 @@ public:
      * @param steering_angle 转向角 (rad)
      */
     void update(double v, double steering_angle);
+
+    /**
+     * @brief 处理控制器上行数据流
+     * @param data 接收到的原始数据
+     * @return 是否成功解析到至少一帧有效数据
+     */
+    bool processControllerDataStream(const std::vector<uint8_t>& data);
+
+    /**
+     * @brief 使用控制器上行数据更新里程计
+     * @param data 上行数据帧，24字节的二进制数据
+     * @return 是否成功解析数据
+     */
+    bool updateFromControllerData(const std::vector<uint8_t>& data);
 
     /**
      * @brief 重置里程计数据到原点
@@ -72,7 +96,7 @@ public:
 
     /**
      * @brief 设置里程计计算方法
-     * @param method 方法名称 ("encoder_only"或"imu_fusion")
+     * @param method 方法名称 ("encoder_only"、"imu_fusion"或"controller_data")
      */
     void setOdomMethod(const std::string& method);
 
@@ -81,6 +105,18 @@ public:
      * @return 方法名称字符串
      */
     std::string getOdomMethod() const;
+
+    /**
+     * @brief 获取电池电压信息
+     * @return 当前电池电压（伏特）
+     */
+    double getBatteryVoltage() const;
+
+    /**
+     * @brief 获取停止标志位
+     * @return 停止标志位值
+     */
+    uint8_t getStopFlag() const;
 
 private:
     // ROS相关
@@ -111,11 +147,33 @@ private:
     double acceleration_x_;         ///< x方向加速度，世界坐标系 (m/s^2)
     double acceleration_y_;         ///< y方向加速度，世界坐标系 (m/s^2)
 
+    // 控制器数据
+    double controller_linear_x_;    ///< 控制器上报的X轴线速度 (m/s)
+    double controller_linear_y_;    ///< 控制器上报的Y轴线速度 (m/s)
+    double controller_linear_z_;    ///< 控制器上报的Z轴线速度 (m/s)
+    double controller_angular_x_;   ///< 控制器上报的X轴角速度 (rad/s)
+    double controller_angular_y_;   ///< 控制器上报的Y轴角速度 (rad/s)
+    double controller_angular_z_;   ///< 控制器上报的Z轴角速度 (rad/s)
+    int16_t controller_odom1_;      ///< 控制器上报的里程计值1
+    int16_t controller_odom2_;      ///< 控制器上报的里程计值2
+    double controller_battery_;     ///< 控制器上报的电池电压 (V)
+    uint8_t controller_flag_stop_;  ///< 控制器停止标志位
+
+    // 数据流处理相关
+    std::deque<uint8_t> data_buffer_;  ///< 数据缓冲区
+    bool frame_in_sync_;               ///< 数据帧同步状态
+    int consecutive_valid_frames_;     ///< 连续有效帧计数
+    int consecutive_invalid_frames_;   ///< 连续无效帧计数
+    int frames_processed_;             ///< 已处理帧计数
+    int valid_frames_;                 ///< 有效帧计数
+    int invalid_frames_;               ///< 无效帧计数
+
     // 配置参数
     bool use_imu_data_;    ///< 是否使用IMU数据
     double fusion_alpha_;  ///< 融合系数 (0-1)，值越大越信任编码器
     OdomMethod odom_method_;  ///< 当前里程计计算方法
     int odom_log_counter_;    ///< 日志计数器
+    double controller_scale_; ///< 控制器数据缩放因子
 
     /**
      * @brief IMU数据回调函数
@@ -146,6 +204,51 @@ private:
      */
     void updateWithIMUFusion(double v, double steering_angle, double dt,
                           double& delta_x, double& delta_y, double& delta_th);
+                          
+    /**
+     * @brief 使用控制器数据更新里程计
+     * @param dt 时间增量 (s)
+     * @param delta_x 输出参数：x方向位移增量 (m)
+     * @param delta_y 输出参数：y方向位移增量 (m)
+     * @param delta_th 输出参数：航向角增量 (rad)
+     */
+    void updateWithControllerData(double dt,
+                              double& delta_x, double& delta_y, double& delta_th);
+
+    /**
+     * @brief 查找数据缓冲区中的帧头位置
+     * @return 帧头位置的索引，如果未找到则返回-1
+     */
+    int findFrameHeader();
+
+    /**
+     * @brief 从数据缓冲区中提取完整的数据帧
+     * @param frame 输出参数：提取的完整数据帧
+     * @return 是否成功提取完整数据帧
+     */
+    bool extractFrame(std::vector<uint8_t>& frame);
+
+    /**
+     * @brief 解析上行数据帧
+     * @param data 上行数据帧原始字节数组
+     * @return 是否成功解析数据
+     */
+    bool parseUplinkFrame(const std::vector<uint8_t>& data);
+
+    /**
+     * @brief 从原始数据中提取短整数值（大端序）
+     * @param data 原始数据数组
+     * @param start_index 起始索引
+     * @return 解析出的短整数值
+     */
+    int16_t extractShort(const std::vector<uint8_t>& data, size_t start_index) const;
+
+    /**
+     * @brief 验证上行数据帧校验和
+     * @param data 原始数据数组
+     * @return 校验和是否正确
+     */
+    bool verifyChecksum(const std::vector<uint8_t>& data) const;
 
     /**
      * @brief 发布里程计消息和TF变换

@@ -1,0 +1,23 @@
+<launch>
+  <!-- 轮距参数 -->
+  <param name="wheelbase" value="0.25" />
+  <param name="max_steering_angle" value="0.6" />
+  <param name="max_speed" value="0.5" />
+  
+  <!-- 里程计方法选择: encoder_only, imu_fusion, controller_data -->
+  <param name="odom_method" value="controller_data" />
+  
+  <!-- 融合参数 -->
+  <param name="fusion_alpha" value="0.8" />
+  
+  <!-- 控制器数据缩放因子 -->
+  <param name="controller_scale" value="10000.0" />
+  
+  <!-- 串口设置 -->
+  <param name="port" value="/dev/ttyUSB0" />
+  <param name="baud_rate" value="115200" />
+  
+  <!-- 启动控制器节点 -->
+  <node name="ackermann_controller" pkg="ackermann_nav" type="ackermann_controller" output="screen">
+  </node>
+</launch> 
