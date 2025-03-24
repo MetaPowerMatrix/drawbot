@@ -78,10 +78,18 @@ private:
     // 添加机械臂控制器
     ArmController arm_controller;
     
+    // 添加新的成员变量
+    double target_heading_;    // 目标朝向
+    double path_curvature_;   // 路径曲率
+    bool use_curve_motion_;   // 是否使用曲线运动
+    
 public:
     MoveDistance() : 
         target_x_(0.0), 
         target_y_(0.0),
+        target_heading_(0.0),
+        path_curvature_(0.0),
+        use_curve_motion_(false),
         movement_started_(false), 
         goal_reached_(false), 
         angle_first_(true), 
@@ -98,29 +106,48 @@ public:
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
     }
     
-    void setTargets(double target_x, double target_y) {
-        // 保存目标坐标到成员变量
+    void setTargets(double target_x, double target_y, double heading = 0.0, double curvature = 0.0) {
+        // 保存目标参数
         target_x_ = target_x;
         target_y_ = target_y;
+        target_heading_ = heading;
+        path_curvature_ = curvature;
         
-        // 处理x为负且y为0的特殊情况
-        if (target_x < 0 && fabs(target_y) < 1e-6) {
-            target_angle_ = M_PI;  // 正后方
-            angle_first_ = false;  // 不需要先转向
-            linear_speed_ = -0.2;  // 后退速度
-        } else {
-            // 正常计算角度和距离
-            target_angle_ = std::atan2(target_y, target_x);
-            angle_first_ = (target_x >= 0);  // 只有前进时需要先转向
-            linear_speed_ = (target_x >= 0) ? 0.2 : -0.2;
-        }
-        
-        // 计算绝对距离
+        // 计算目标距离
         target_distance_ = std::sqrt(target_x_ * target_x_ + target_y_ * target_y_);
         
-        ROS_INFO("Set targets: x = %.2f meters, y = %.2f meters", target_x_, target_y_);
-        ROS_INFO("Calculated: distance = %.2f meters, angle = %.2f radians", target_distance_, target_angle_);
-        ROS_INFO("Movement mode: %s", angle_first_ ? "Turn then move" : "Direct move");
+        // 处理特殊情况：直线后退
+        if (target_x < 0 && fabs(target_y) < 1e-6) {
+            target_angle_ = M_PI;
+            angle_first_ = false;
+            linear_speed_ = -0.2;
+            use_curve_motion_ = false;
+        } 
+        // 处理曲线运动情况
+        else if (fabs(target_y) > 1e-6 || fabs(path_curvature_) > 1e-6) {
+            target_angle_ = std::atan2(target_y, target_x);
+            use_curve_motion_ = true;
+            linear_speed_ = 0.2;  // 曲线运动时使用较小的速度
+            
+            // 如果未指定曲率，根据目标点计算建议曲率
+            if (fabs(path_curvature_) < 1e-6) {
+                // 使用简单的圆弧估算
+                double chord_length = target_distance_;
+                double heading_diff = normalizeAngle(target_heading_ - target_angle_);
+                path_curvature_ = 2 * sin(heading_diff / 2) / chord_length;
+            }
+        }
+        // 普通直线前进
+        else {
+            target_angle_ = 0.0;
+            angle_first_ = true;
+            linear_speed_ = 0.2;
+            use_curve_motion_ = false;
+        }
+        
+        ROS_INFO("设置目标点: x=%.2f, y=%.2f, 朝向=%.2f, 曲率=%.2f", 
+                target_x_, target_y_, target_heading_, path_curvature_);
+        ROS_INFO("运动模式: %s", use_curve_motion_ ? "曲线运动" : "直线运动");
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
@@ -194,31 +221,50 @@ public:
     
     void move(bool rotating, double angle_error, double speed_factor=1.0) {
         geometry_msgs::Twist cmd_vel;
+        
         if (rotating) {
-            // 转向阶段：小速度前进+转向
-            cmd_vel.linear.x = 0.02;  // 转向时的小前进速度
+            // 转向阶段保持不变
+            cmd_vel.linear.x = 0.02;
             cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
-            ROS_DEBUG("Steering with speed: %.2f m/s, angular: %.2f rad/s", 
-                     cmd_vel.linear.x, cmd_vel.angular.z);
-        } else {
-            // 直线阶段：正常速度+方向微调
+        } 
+        else if (use_curve_motion_) {
+            // 曲线运动模式
+            cmd_vel.linear.x = linear_speed_;
+            
+            // 计算当前位置到目标点的向量
+            double dx = target_x_ - (msg->pose.pose.position.x - start_x_);
+            double dy = target_y_ - (msg->pose.pose.position.y - start_y_);
+            double distance_to_goal = std::sqrt(dx*dx + dy*dy);
+            
+            // 计算期望航向角
+            double desired_heading = std::atan2(dy, dx);
+            double heading_error = normalizeAngle(desired_heading - current_th_);
+            
+            // 根据路径曲率和当前误差计算转向角速度
+            double base_angular_velocity = linear_speed_ * path_curvature_;
+            double correction = 0.5 * heading_error;  // 比例控制修正
+            cmd_vel.angular.z = base_angular_velocity + correction;
+            
+            // 限制角速度
+            cmd_vel.angular.z = std::max(-0.5, std::min(0.5, cmd_vel.angular.z));
+            
+            ROS_DEBUG("曲线运动: 距离=%.2f, 航向误差=%.2f, 角速度=%.2f", 
+                    distance_to_goal, heading_error, cmd_vel.angular.z);
+        }
+        else {
+            // 直线运动模式保持不变
             double heading_error;
             if (linear_speed_ < 0) {
-                // 后退时，直接计算当前朝向与目标角度的差值
-                // heading_error = target_angle_ - current_th_;
                 heading_error = 0;
             } else {
-                // 前进时，使用原有公式
                 heading_error = target_angle_ - (current_th_ - start_th_);
-                // 标准化角度差到[-pi, pi]
-                heading_error = fmod(heading_error + M_PI, 2*M_PI) - M_PI;
-            }            
+                heading_error = normalizeAngle(heading_error);
+            }
             
             cmd_vel.linear.x = linear_speed_;
-            cmd_vel.angular.z = 0.3 * heading_error;  // 方向保持的比例控制
-            ROS_DEBUG("Straight moving with speed: %.2f m/s, angular: %.2f rad/s",
-                     cmd_vel.linear.x, cmd_vel.angular.z);
+            cmd_vel.angular.z = 0.3 * heading_error;
         }
+        
         cmd_vel_pub_.publish(cmd_vel);
     }
     
@@ -253,13 +299,20 @@ public:
             ROS_INFO("Resetting arm after drawing");
         }
     }
+    
+    // 添加角度标准化函数
+    double normalizeAngle(double angle) {
+        return fmod(angle + M_PI, 2*M_PI) - M_PI;
+    }
 };
 
 // 定义目标点结构体
 struct TargetPoint {
-    double x;
-    double y;
-    bool draw;
+    double x;          // 目标x坐标
+    double y;          // 目标y坐标
+    double heading;    // 目标朝向角度（弧度）
+    double curvature; // 路径曲率（0表示直线，正值表示左转，负值表示右转）
+    bool draw;        // 是否绘制
 };
 
 // 解析XML文件，获取目标点集合
@@ -274,7 +327,6 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
     tinyxml2::XMLError result = doc.LoadFile(file_path.c_str());
     if (result != tinyxml2::XML_SUCCESS) {
         ROS_ERROR("Failed to load route file: %s (Error code: %d)", file_path.c_str(), result);
-        // 打印更详细的错误信息
         const char* errorStr1 = doc.ErrorStr();
         ROS_ERROR("XML Error description: %s", errorStr1);
         return targets;
@@ -288,7 +340,6 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
 
     // 遍历每个DrawStep
     for (tinyxml2::XMLElement* step = root->FirstChildElement("DrawStep"); step; step = step->NextSiblingElement("DrawStep")) {
-        // 获取DrawStep的属性，便于调试
         int seqno = step->IntAttribute("seqno", -1);
         ROS_DEBUG("Processing DrawStep with seqno: %d", seqno);
         
@@ -304,18 +355,17 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
             point.x = linept->DoubleAttribute("x");
             point.y = linept->DoubleAttribute("y");
             
-            // 更健壮的draw属性获取
+            // 获取目标朝向（如果未指定则根据下一个点计算）
+            point.heading = linept->DoubleAttribute("heading", 0.0);
+            
+            // 获取路径曲率（默认为0，表示直线运动）
+            point.curvature = linept->DoubleAttribute("curvature", 0.0);
+            
+            // 获取draw属性
             const char* draw_attr = linept->Attribute("draw");
             if (draw_attr) {
-                // 直接检查属性是否包含"true"字符串，不考虑引号或等号
                 std::string draw_str = draw_attr;
-                // 打印原始属性值以便调试
-                ROS_DEBUG("Found draw attribute with raw value: '%s'", draw_attr);
-                
-                // 将字符串转换为小写以便比较
                 std::transform(draw_str.begin(), draw_str.end(), draw_str.begin(), ::tolower);
-                
-                // 检查是否包含"true"字符串，接受多种可能的格式
                 point.draw = (draw_str.find("true") != std::string::npos);
             } else {
                 ROS_WARN("Missing 'draw' attribute for point (%.2f, %.2f), defaulting to false", point.x, point.y);
@@ -323,9 +373,22 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
             }
             
             targets.push_back(point);
-            ROS_INFO("Added target point: (%.2f, %.2f), draw=%s", 
-                    point.x, point.y, point.draw ? "true" : "false");
+            ROS_INFO("Added target point: (%.2f, %.2f), heading=%.2f, curvature=%.2f, draw=%s", 
+                    point.x, point.y, point.heading, point.curvature, point.draw ? "true" : "false");
         }
+    }
+
+    // 如果没有指定heading，根据下一个点计算默认朝向
+    for (size_t i = 0; i < targets.size() - 1; ++i) {
+        if (targets[i].heading == 0.0) {
+            double dx = targets[i + 1].x - targets[i].x;
+            double dy = targets[i + 1].y - targets[i].y;
+            targets[i].heading = std::atan2(dy, dx);
+        }
+    }
+    // 最后一个点如果未指定朝向，保持与前一个点相同
+    if (!targets.empty() && targets.back().heading == 0.0 && targets.size() > 1) {
+        targets.back().heading = targets[targets.size() - 2].heading;
     }
 
     ROS_INFO("Parsed %lu target points from route file", targets.size());
@@ -356,13 +419,14 @@ int main(int argc, char** argv) {
     // 按顺序处理每个目标点
     for (size_t i = 0; i < targets.size(); ++i) {
         const auto& target = targets[i];
-        ROS_INFO("Moving to target point %lu: (%.2f, %.2f)", i+1, target.x, target.y);
+        ROS_INFO("移动到目标点 %lu: (%.2f, %.2f), 朝向=%.2f°, 曲率=%.2f", 
+                i+1, target.x, target.y, target.heading * 180.0 / M_PI, target.curvature);
         
         // 根据draw属性控制机械臂
         move_controller.controlArm(target.draw);
         
         // 设置目标点并开始移动
-        move_controller.setTargets(target.x, target.y);
+        move_controller.setTargets(target.x, target.y, target.heading, target.curvature);
         
         // 等待小车到达目标点
         ros::Rate rate(10);
@@ -377,6 +441,6 @@ int main(int argc, char** argv) {
         }
     }
     
-    ROS_INFO("All target points reached");
+    ROS_INFO("所有目标点已到达");
     return 0;
 }

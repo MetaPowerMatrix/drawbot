@@ -1,20 +1,21 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <SignDrawInfo>
-  <DrawStep seqno="1" direction="0" length="1" startx="0" starty="0">
-    <linepts>
-      <linept x="1" y="0" draw="true"/>
-    </linepts>
-  </DrawStep>
-  <DrawStep seqno="2" direction="3.14/4" length="0.5" startx="1" starty="0">
-    <linepts>
-      <linept x="0.5" y="0.5" draw="true"/>
-      <linept x="1" y="0" draw="false"/>
-    </linepts>
-  </DrawStep>
-  <DrawStep seqno="3" direction="3.14/4" length="0.5" startx="1" starty="0">
-    <linepts>
-      <linept x="0.5" y="0.5" draw="true"/>
-      <linept x="1" y="0" draw="false"/>
-    </linepts>
-  </DrawStep>
+    <DrawStep seqno="1">
+        <linepts>
+            <!-- 直线前进示例 -->
+            <linept x="1.0" y="0.0" heading="0.0" draw="false"/>
+            
+            <!-- 左转弧线示例（正曲率） -->
+            <linept x="2.0" y="1.0" heading="1.57" curvature="0.5" draw="true"/>
+            
+            <!-- 右转弧线示例（负曲率） -->
+            <linept x="3.0" y="0.0" heading="0.0" curvature="-0.5" draw="true"/>
+            
+            <!-- 不指定曲率，让程序自动计算 -->
+            <linept x="4.0" y="1.0" heading="0.785" draw="true"/>
+            
+            <!-- 直线后退示例 -->
+            <linept x="3.0" y="1.0" heading="3.14" draw="false"/>
+        </linepts>
+    </DrawStep>
 </SignDrawInfo> 
