@@ -19,6 +19,9 @@
 #define FRAME_TAIL 0x7D
 #define FRAME_SIZE 24  // 上行数据帧大小为24字节
 
+// 日志输出间隔
+#define ODOM_LOG_INTERVAL 100  // 每100次更新输出一次详细日志
+
 /**
  * @brief 里程计数据更新器类
  * 
