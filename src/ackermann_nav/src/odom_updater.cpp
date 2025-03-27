@@ -455,10 +455,10 @@ bool OdomUpdater::verifyChecksum(const std::vector<uint8_t>& data) const {
         return false;
     }
     
-    // 计算校验和（直接求和，使用22号位置的值）
+    // 计算校验和（使用异或XOR，而不是求和）
     uint8_t calculated_checksum = 0;
     for (size_t i = 0; i < 22; ++i) {
-        calculated_checksum += data[i];
+        calculated_checksum ^= data[i];  // 使用异或运算
     }
     
     // 获取数据帧中的校验和

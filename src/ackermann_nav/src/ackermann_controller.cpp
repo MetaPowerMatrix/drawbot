@@ -197,15 +197,6 @@ public:
         return frame;
     }
 
-    uint8_t calculateChecksum(const std::vector<uint8_t>& data, size_t start, size_t end) {
-        // Simple sum checksum (sum of all bytes modulo 256) - for uplink verification
-        uint8_t checksum = 0;
-        for (size_t i = start; i < end && i < data.size(); ++i) {
-            checksum += data[i];
-        }
-        return checksum;
-    }
-
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
         // Increment counter
         cmd_log_counter_++;
