@@ -4,7 +4,7 @@
     <param name="robot_description" command="$(find xacro)/xacro '$(find ackermann_nav)/urdf/ackermann.urdf.xacro'" />
 
     <!-- Start RPLidar -->
-    <include file="$(find rplidar_ros)/launch/rplidar.launch" />
+    <!-- <include file="$(find rplidar_ros)/launch/rplidar.launch" /> -->
 
     <!-- Start robot state publisher node -->
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
@@ -12,7 +12,7 @@
     </node>
 
     <!-- Load map file -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(find ackermann_nav)/maps/map.yaml" />
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(find ackermann_nav)/maps/map.yaml" /> -->
 
     <!-- Start AMCL localization -->
     <include file="$(find amcl)/examples/amcl_diff.launch" />
