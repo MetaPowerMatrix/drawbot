@@ -12,7 +12,7 @@
     </node>
 
     <!-- Load map file -->
-    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(find ackermann_nav)/maps/map.yaml" /> -->
+    <node name="map_server" pkg="map_server" type="map_server" args="$(find ackermann_nav)/maps/map.yaml" />
 
     <!-- Start AMCL localization -->
     <include file="$(find amcl)/examples/amcl_diff.launch" />
