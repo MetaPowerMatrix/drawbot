@@ -2,20 +2,14 @@
 <SignDrawInfo>
     <DrawStep seqno="1">
         <linepts>
-            <!-- 直线前进示例 -->
-            <linept x="1.0" y="0.0" heading="0.0" draw="false"/>
+            <!-- 前进0.5米 -->
+            <linept x="0.5" y="0.0" heading="0.0" draw="false"/>
             
-            <!-- 左转弧线示例（正曲率） -->
-            <linept x="2.0" y="1.0" heading="1.57" curvature="0.5" draw="true"/>
+            <!-- 左转90度，使用正曲率实现平滑转弯 -->
+            <linept x="0.5" y="0.5" heading="1.57" curvature="0.8" draw="false"/>
             
-            <!-- 右转弧线示例（负曲率） -->
-            <linept x="3.0" y="0.0" heading="0.0" curvature="-0.5" draw="true"/>
-            
-            <!-- 不指定曲率，让程序自动计算 -->
-            <linept x="4.0" y="1.0" heading="0.785" draw="true"/>
-            
-            <!-- 直线后退示例 -->
-            <linept x="3.0" y="1.0" heading="3.14" draw="false"/>
+            <!-- 调整到北偏东45度方向 -->
+            <linept x="0.5" y="1.0" heading="2.36" curvature="0.4" draw="false"/>
         </linepts>
     </DrawStep>
 </SignDrawInfo> 
