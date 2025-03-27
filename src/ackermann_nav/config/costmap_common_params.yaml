@@ -1,0 +1,44 @@
+footprint: [[0.2, 0.2], [0.2, -0.2], [-0.2, -0.2], [-0.2, 0.2]]  # 机器人轮廓
+footprint_padding: 0.01  # 轮廓扩展距离
+
+# 障碍物层参数
+obstacle_layer:
+  enabled: true
+  max_obstacle_height: 2.0
+  min_obstacle_height: 0.0
+  obstacle_range: 2.5
+  raytrace_range: 3.0
+  combination_method: 1
+  observation_sources: scan
+
+  scan:
+    sensor_frame: base_link
+    data_type: LaserScan
+    topic: scan
+    marking: true
+    clearing: true
+    min_obstacle_height: 0.0
+    max_obstacle_height: 2.0
+    min_d: 0.0
+    max_d: 3.0
+    obstacle_range: 2.5
+    raytrace_range: 3.0
+
+# 膨胀层参数
+inflation_layer:
+  enabled: true
+  cost_scaling_factor: 3.0
+  inflation_radius: 0.55
+
+# 代价地图通用参数
+cost_scaling_factor: 3.0
+inflation_radius: 0.55
+transform_tolerance: 0.2
+map_type: costmap
+update_frequency: 5.0
+publish_frequency: 2.0
+global_frame: map
+robot_base_frame: base_link
+rolling_window: false
+track_unknown_space: true
+always_send_full_costmap: true 
