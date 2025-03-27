@@ -11,9 +11,11 @@
 #include <cstdint>
 #include <queue>
 #include <deque>
+#include <cmath>
+#include <mutex>
 
-// 定义里程计日志输出间隔（每多少次更新输出一次详细日志）
-#define ODOM_LOG_INTERVAL 100
+// 添加命名空间前缀避免宏定义冲突
+#define ODOM_UPDATER_LOG_INTERVAL 100
 
 // 帧头和帧尾标识
 #define FRAME_HEADER 0x7B

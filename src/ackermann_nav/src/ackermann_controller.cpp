@@ -51,9 +51,6 @@ private:
     // 里程计更新器
     OdomUpdater odom_updater_;
 
-    double getBatteryVoltage() const;
-    uint8_t getStopFlag() const;
-
 public:
     AckermannController() : x_(0.0), y_(0.0), th_(0.0), last_v_(0.0), last_steering_angle_(0.0), is_shutting_down_(false), odom_updater_(nh_) {
         nh_.param<double>("wheelbase", wheelbase_, 0.25);
@@ -376,14 +373,6 @@ public:
         }
         
         is_shutting_down_ = false;
-    }
-
-    double getBatteryVoltage() const {
-        return odom_updater_.getBatteryVoltage();
-    }
-
-    uint8_t getStopFlag() const {
-        return odom_updater_.getStopFlag();
     }
 };
 
