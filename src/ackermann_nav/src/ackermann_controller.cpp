@@ -38,7 +38,6 @@ private:
     int cmd_log_counter_ = 0;
     int odom_log_counter_ = 0;
     const int CMD_LOG_INTERVAL = 50;   // Print command logs every 50 iterations
-    const int ODOM_LOG_INTERVAL = 100; // Print odometry logs every 100 iterations
 
     // Serial communication
     serial::Serial serial_port_;
