@@ -75,6 +75,10 @@ private:
     
     double current_th_;
     
+    // 添加当前位姿信息
+    double current_x_;
+    double current_y_;
+    
     // 添加机械臂控制器
     ArmController arm_controller;
     
@@ -157,18 +161,20 @@ public:
             return;
         }
 
+        // 更新当前位置信息
+        current_x_ = msg->pose.pose.position.x;
+        current_y_ = msg->pose.pose.position.y;
+        current_th_ = tf::getYaw(msg->pose.pose.orientation);
+
         if (!movement_started_) {
             // 记录起始位置和朝向
-            start_x_ = msg->pose.pose.position.x;
-            start_y_ = msg->pose.pose.position.y;
-            start_th_ = tf::getYaw(msg->pose.pose.orientation);
+            start_x_ = current_x_;
+            start_y_ = current_y_;
+            start_th_ = current_th_;
             movement_started_ = true;
             ROS_INFO("Starting movement, initial position: (%.2f, %.2f), heading: %.2f", start_x_, start_y_, start_th_);
         }
         
-        // 获取当前绝对朝向
-        current_th_ = tf::getYaw(msg->pose.pose.orientation);
-
         // 计算与目标角度的差值（考虑初始朝向）
         double target_relative_angle = std::atan2(target_y_, target_x_);
         double target_absolute_angle = start_th_ + target_relative_angle;
@@ -184,9 +190,9 @@ public:
             if (fabs(angle_diff) < 0.05) {
                 angle_finished_ = true;
                 // 重置起始位置和朝向
-                start_x_ = msg->pose.pose.position.x;
-                start_y_ = msg->pose.pose.position.y;
-                start_th_ = tf::getYaw(msg->pose.pose.orientation);
+                start_x_ = current_x_;
+                start_y_ = current_y_;
+                start_th_ = current_th_;
                 ROS_INFO("Rotation completed, new start position: (%.2f, %.2f)", start_x_, start_y_);
             } else {
                 // 带小线速度转向（0.1 m/s）
@@ -196,14 +202,14 @@ public:
         }
         
         // 计算已移动的距离
-        double dx = msg->pose.pose.position.x - start_x_;
-        double dy = msg->pose.pose.position.y - start_y_;
+        double dx = current_x_ - start_x_;
+        double dy = current_y_ - start_y_;
         double distance_moved = std::sqrt(dx*dx + dy*dy);
         
         // 输出调试信息
         ROS_DEBUG("Current position: (%.2f, %.2f), distance moved: %.2f meters",
-                 msg->pose.pose.position.x,
-                 msg->pose.pose.position.y,
+                 current_x_,
+                 current_y_,
                  distance_moved);
         
         // 检查是否达到目标距离
@@ -232,8 +238,8 @@ public:
             cmd_vel.linear.x = linear_speed_;
             
             // 计算当前位置到目标点的向量
-            double dx = target_x_ - (msg->pose.pose.position.x - start_x_);
-            double dy = target_y_ - (msg->pose.pose.position.y - start_y_);
+            double dx = target_x_ - (current_x_ - start_x_);
+            double dy = target_y_ - (current_y_ - start_y_);
             double distance_to_goal = std::sqrt(dx*dx + dy*dy);
             
             // 计算期望航向角
