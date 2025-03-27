@@ -149,9 +149,9 @@ public:
             use_curve_motion_ = false;
         }
         
-        ROS_INFO("设置目标点: x=%.2f, y=%.2f, 朝向=%.2f, 曲率=%.2f", 
+        ROS_INFO("Set target: x=%.2f, y=%.2f, heading=%.2f, curvature=%.2f", 
                 target_x_, target_y_, target_heading_, path_curvature_);
-        ROS_INFO("运动模式: %s", use_curve_motion_ ? "曲线运动" : "直线运动");
+        ROS_INFO("Motion mode: %s", use_curve_motion_ ? "Curve motion" : "Straight motion");
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
@@ -254,7 +254,7 @@ public:
             // 限制角速度
             cmd_vel.angular.z = std::max(-0.5, std::min(0.5, cmd_vel.angular.z));
             
-            ROS_DEBUG("曲线运动: 距离=%.2f, 航向误差=%.2f, 角速度=%.2f", 
+            ROS_DEBUG("Curve motion: distance=%.2f, heading_error=%.2f, angular_velocity=%.2f", 
                     distance_to_goal, heading_error, cmd_vel.angular.z);
         }
         else {
@@ -425,7 +425,7 @@ int main(int argc, char** argv) {
     // 按顺序处理每个目标点
     for (size_t i = 0; i < targets.size(); ++i) {
         const auto& target = targets[i];
-        ROS_INFO("移动到目标点 %lu: (%.2f, %.2f), 朝向=%.2f°, 曲率=%.2f", 
+        ROS_INFO("Moving to target point %lu: (%.2f, %.2f), heading=%.2f°, curvature=%.2f", 
                 i+1, target.x, target.y, target.heading * 180.0 / M_PI, target.curvature);
         
         // 根据draw属性控制机械臂
@@ -447,6 +447,6 @@ int main(int argc, char** argv) {
         }
     }
     
-    ROS_INFO("所有目标点已到达");
+    ROS_INFO("All target points reached");
     return 0;
 }
