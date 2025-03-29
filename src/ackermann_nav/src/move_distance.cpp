@@ -230,7 +230,7 @@ public:
         
         if (rotating) {
             // 转向阶段保持不变
-            cmd_vel.linear.x = 0.02;
+            // cmd_vel.linear.x = 0.02;
             cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
         } 
         else if (use_curve_motion_) {

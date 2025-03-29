@@ -266,7 +266,7 @@ public:
             for (size_t i = 0; i < dynamic_frame.size(); ++i) {
                 ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(dynamic_frame[i]) << " ";
             }
-            ROS_INFO("Sent frame to controller (binary): %s", ss.str().c_str());
+            // ROS_INFO("Sent frame to controller (binary): %s", ss.str().c_str());
         } catch (const std::exception& e) {
             ROS_ERROR("Serial write or read error: %s", e.what());
         }

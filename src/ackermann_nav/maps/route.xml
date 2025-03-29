@@ -6,10 +6,10 @@
             <linept x="0.5" y="0.0" heading="0.0" draw="false"/>
             
             <!-- 左转90度，使用正曲率实现平滑转弯，到达(0.5, -0.5)点，车头朝南 -->
-            <linept x="0.5" y="-0.5" heading="1.57" curvature="0.8" draw="false"/>
+            <linept x="0.5" y="0.5" heading="1.57" curvature="0.8" draw="false"/>
             
             <!-- 调整到北偏东45度方向，使用负曲率实现右转 -->
-            <linept x="0.5" y="-0.5" heading="2.36" curvature="-0.6" draw="false"/>
+            <linept x="0.5" y="0.5" heading="2.36" curvature="-0.6" draw="false"/>
         </linepts>
     </DrawStep>
 </SignDrawInfo> 
