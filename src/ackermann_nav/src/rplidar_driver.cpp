@@ -55,7 +55,7 @@ private:
 
 public:
     RPLidarDriver() : 
-        port_name_("/dev/ttyUSB0"), 
+        port_name_("/dev/ttyUSB1"), 
         baud_rate_(115200),
         frame_id_("laser"),
         min_angle_(-M_PI),
@@ -69,7 +69,7 @@ public:
         
         // 获取参数
         ros::NodeHandle private_nh("~");
-        private_nh.param<std::string>("serial_port", port_name_, "/dev/ttyUSB0");
+        private_nh.param<std::string>("serial_port", port_name_, "/dev/ttyUSB1");
         private_nh.param<int>("serial_baudrate", baud_rate_, 115200);
         private_nh.param<std::string>("frame_id", frame_id_, "laser");
         private_nh.param<bool>("inverted", inverted_, false);
