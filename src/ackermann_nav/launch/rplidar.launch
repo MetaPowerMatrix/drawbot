@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- RPLidar A1驱动节点 -->
+  <node name="rplidar_node" pkg="ackermann_nav" type="rplidar_node" output="screen">
+    <!-- 串口参数 -->
+    <param name="serial_port" type="string" value="/dev/ttyUSB1"/>
+    <param name="serial_baudrate" type="int" value="115200"/>
+    
+    <!-- 帧ID和坐标系参数 -->
+    <param name="frame_id" type="string" value="laser"/>
+    <param name="inverted" type="bool" value="false"/>
+    <param name="angle_compensate" type="bool" value="true"/>
+    
+    <!-- 扫描范围参数 -->
+    <param name="min_angle" type="double" value="-3.14159"/>
+    <param name="max_angle" type="double" value="3.14159"/>
+    <param name="min_range" type="double" value="0.15"/>
+    <param name="max_range" type="double" value="6.0"/>
+  </node>
+  
+  <!-- 静态TF变换，定义激光雷达相对于底盘的位置 -->
+  <node pkg="tf" type="static_transform_publisher" name="laser_broadcaster"
+        args="0 0 0.15 0 0 0 base_link laser 100" />
+</launch> 
