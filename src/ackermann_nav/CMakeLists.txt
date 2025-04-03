@@ -54,16 +54,11 @@ target_link_libraries(move_distance
 add_executable(obstacle_detector src/obstacle_detector.cpp)
 target_link_libraries(obstacle_detector ${catkin_LIBRARIES})
 
-# 添加RPLidar A1驱动节点
-add_executable(rplidar_node src/rplidar_driver.cpp)
-target_link_libraries(rplidar_node ${catkin_LIBRARIES})
-
 install(TARGETS
   ackermann_controller
   path_follower
   move_distance
   obstacle_detector
-  rplidar_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

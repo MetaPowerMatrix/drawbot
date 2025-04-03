@@ -3,8 +3,8 @@
     <!-- Load robot parameters -->
     <param name="robot_description" command="$(find xacro)/xacro '$(find ackermann_nav)/urdf/ackermann.urdf.xacro'" />
 
-    <!-- 启动RPLidar A1驱动 -->
-    <include file="$(find ackermann_nav)/launch/rplidar.launch" />
+    <!-- 启动RPLidar A1官方驱动 -->
+    <include file="$(find rplidar_ros)/launch/rplidar.launch" />
 
     <!-- Start robot state publisher node -->
     <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
