@@ -15,12 +15,12 @@ private:
 public:
     ArmController() : is_connected(false) {
         // 尝试打开串口
-        serial_port.open("/dev/ttyUSB0");
+        serial_port.open("/dev/ttyUSB1");
         if (serial_port.is_open()) {
             is_connected = true;
-            ROS_INFO("Arm controller connected to /dev/ttyUSB0");
+            ROS_INFO("Arm controller connected to /dev/ttyUSB1");
         } else {
-            ROS_WARN("Failed to open /dev/ttyUSB0 for arm control");
+            ROS_WARN("Failed to open /dev/ttyUSB1 for arm control");
         }
     }
 
