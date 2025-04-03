@@ -6,6 +6,7 @@
 #include <fstream>  // 添加串口操作支持
 #include <unistd.h> // 添加usleep支持
 #include <tinyxml2.h> // 添加XML解析支持
+#include <std_msgs/Bool.h> // 添加碰撞警告消息支持
 
 class ArmController {
 private:
@@ -55,6 +56,7 @@ private:
     ros::NodeHandle nh_;
     ros::Publisher cmd_vel_pub_;
     ros::Subscriber odom_sub_;
+    ros::Subscriber collision_sub_; // 添加碰撞警告订阅者
     
     double target_distance_;
     double target_angle_;
@@ -87,8 +89,15 @@ private:
     double path_curvature_;   // 路径曲率
     bool use_curve_motion_;   // 是否使用曲线运动
     
+    // 碰撞避免相关变量
+    bool collision_detected_; // 是否检测到碰撞
+    bool avoiding_;           // 是否正在执行避障
+    ros::Time collision_time_; // 碰撞检测时间
+    int avoidance_phase_;     // 避障阶段：0=后退, 1=转向, 2=继续前进
+    
 public:
-    MoveDistance() : 
+    MoveDistance(const std::string& arm_port = "/dev/ttyUSB1") : 
+        arm_controller(arm_port),
         target_x_(0.0), 
         target_y_(0.0),
         target_heading_(0.0),
@@ -98,7 +107,10 @@ public:
         goal_reached_(false), 
         angle_first_(true), 
         angle_finished_(false),
-        current_th_(0.0) {
+        current_th_(0.0),
+        collision_detected_(false),
+        avoiding_(false),
+        avoidance_phase_(0) {
         // 默认参数设置
         target_distance_ = 0.0;
         target_angle_ = 0.0;
@@ -108,6 +120,25 @@ public:
         // 创建发布者和订阅者
         cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
+        
+        // 订阅碰撞警告消息
+        collision_sub_ = nh_.subscribe("collision_warning", 10, &MoveDistance::collisionCallback, this);
+        
+        ROS_INFO("MoveDistance初始化完成，已订阅collision_warning消息");
+    }
+    
+    // 添加碰撞回调函数
+    void collisionCallback(const std_msgs::Bool::ConstPtr& msg) {
+        if (msg->data && !collision_detected_ && !avoiding_) {
+            ROS_WARN("检测到碰撞警告！启动避障程序");
+            collision_detected_ = true;
+            collision_time_ = ros::Time::now();
+            avoiding_ = true;
+            avoidance_phase_ = 0; // 开始避障的第一阶段：后退
+            
+            // 立即停止当前动作
+            stop();
+        }
     }
     
     void setTargets(double target_x, double target_y, double heading = 0.0, double curvature = 0.0) {
@@ -165,6 +196,12 @@ public:
         current_x_ = msg->pose.pose.position.x;
         current_y_ = msg->pose.pose.position.y;
         current_th_ = tf::getYaw(msg->pose.pose.orientation);
+
+        // 如果正在避障，处理避障逻辑
+        if (avoiding_) {
+            handleAvoidance();
+            return;
+        }
 
         if (!movement_started_) {
             // 记录起始位置和朝向
@@ -225,7 +262,50 @@ public:
         }
     }
     
+    // 处理避障逻辑
+    void handleAvoidance() {
+        ros::Duration time_since_collision = ros::Time::now() - collision_time_;
+        
+        // 根据不同的避障阶段执行不同动作
+        if (avoidance_phase_ == 0) {  // 后退阶段
+            if (time_since_collision.toSec() < 1.0) {  // 后退1秒
+                // 执行后退动作
+                geometry_msgs::Twist cmd_vel;
+                cmd_vel.linear.x = -0.15;  // 低速后退
+                cmd_vel.angular.z = 0.0;
+                cmd_vel_pub_.publish(cmd_vel);
+                ROS_DEBUG("避障-后退阶段 (%.1f秒)", time_since_collision.toSec());
+            } else {
+                // 进入转向阶段
+                avoidance_phase_ = 1;
+                collision_time_ = ros::Time::now();
+            }
+        } else if (avoidance_phase_ == 1) {  // 转向阶段
+            if (time_since_collision.toSec() < 1.5) {  // 转向1.5秒
+                // 执行转向动作（随机选择左转或右转，这里选择右转）
+                geometry_msgs::Twist cmd_vel;
+                cmd_vel.linear.x = 0.0;
+                cmd_vel.angular.z = -0.5;  // 右转
+                cmd_vel_pub_.publish(cmd_vel);
+                ROS_DEBUG("避障-转向阶段 (%.1f秒)", time_since_collision.toSec());
+            } else {
+                // 避障完成，恢复正常导航
+                avoiding_ = false;
+                collision_detected_ = false;
+                ROS_INFO("避障完成，恢复正常导航");
+                
+                // 重置导航状态
+                reset();
+            }
+        }
+    }
+    
     void move(bool rotating, double angle_error, double speed_factor=1.0) {
+        // 如果检测到碰撞，不执行正常的移动
+        if (collision_detected_) {
+            return;
+        }
+        
         geometry_msgs::Twist cmd_vel;
         
         if (rotating) {
@@ -405,20 +485,34 @@ std::vector<TargetPoint> parseRouteFile(const std::string& file_path) {
 int main(int argc, char** argv) {
     ros::init(argc, argv, "move_distance");
     
-    if (argc != 2) {
-        ROS_ERROR("Usage: %s <route_file_path>", argv[0]);
+    // 解析参数：路线文件和可选的串口设备名
+    std::string route_file;
+    std::string arm_port = "/dev/ttyUSB1"; // 默认串口设备名
+    
+    if (argc < 2) {
+        ROS_ERROR("用法: %s <route_file_path> [arm_port]", argv[0]);
         return 1;
+    }
+    
+    route_file = argv[1];
+    
+    // 如果指定了串口设备名，则使用指定的设备名
+    if (argc > 2) {
+        arm_port = argv[2];
+        ROS_INFO("使用指定的机械臂串口设备: %s", arm_port.c_str());
+    } else {
+        ROS_INFO("使用默认机械臂串口设备: %s", arm_port.c_str());
     }
     
     // 解析路由文件
-    std::string route_file = argv[1];
     std::vector<TargetPoint> targets = parseRouteFile(route_file);
     if (targets.empty()) {
-        ROS_ERROR("No valid target points found in route file");
+        ROS_ERROR("路由文件中未找到有效的目标点");
         return 1;
     }
     
-    MoveDistance move_controller;
+    // 创建移动控制器，使用指定的串口设备名
+    MoveDistance move_controller(arm_port);
     
     // 等待1秒钟让ROS系统完全初始化
     ros::Duration(1.0).sleep();
@@ -426,7 +520,7 @@ int main(int argc, char** argv) {
     // 按顺序处理每个目标点
     for (size_t i = 0; i < targets.size(); ++i) {
         const auto& target = targets[i];
-        ROS_INFO("Moving to target point %lu: (%.2f, %.2f), heading=%.2f°, curvature=%.2f", 
+        ROS_INFO("移动到目标点 %lu: (%.2f, %.2f), 朝向=%.2f°, 曲率=%.2f", 
                 i+1, target.x, target.y, target.heading * 180.0 / M_PI, target.curvature);
         
         // 根据draw属性控制机械臂
@@ -435,7 +529,7 @@ int main(int argc, char** argv) {
         // 设置目标点并开始移动
         move_controller.setTargets(target.x, target.y, target.heading, target.curvature);
         
-        // 等待小车到达目标点
+        // 等待小车到达目标点，或遇到障碍物避障
         ros::Rate rate(10);
         while (ros::ok() && !move_controller.isGoalReached()) {
             ros::spinOnce();
@@ -448,6 +542,6 @@ int main(int argc, char** argv) {
         }
     }
     
-    ROS_INFO("All target points reached");
+    ROS_INFO("所有目标点已到达");
     return 0;
 }
