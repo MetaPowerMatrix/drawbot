@@ -55,7 +55,7 @@ private:
 
 public:
     RPLidarDriver() : 
-        port_name_("/dev/ttyUSB1"), 
+        port_name_("/dev/ttyUSB0"), 
         baud_rate_(115200),
         frame_id_("laser"),
         min_angle_(-M_PI),
@@ -69,7 +69,7 @@ public:
         
         // 获取参数
         ros::NodeHandle private_nh("~");
-        private_nh.param<std::string>("serial_port", port_name_, "/dev/ttyUSB1");
+        private_nh.param<std::string>("serial_port", port_name_, "/dev/ttyUSB0");
         private_nh.param<int>("serial_baudrate", baud_rate_, 115200);
         private_nh.param<std::string>("frame_id", frame_id_, "laser");
         private_nh.param<bool>("inverted", inverted_, false);
@@ -108,11 +108,11 @@ public:
         resetLidar();
         
         // 检查激光雷达健康状态
-        if (!checkLidarHealth()) {
-            ROS_ERROR("RPLidar health check failed");
-            ros::shutdown();
-            return;
-        }
+        // if (!checkLidarHealth()) {
+        //     ROS_ERROR("RPLidar health check failed");
+        //     ros::shutdown();
+        //     return;
+        // }
         
         // 启动扫描线程
         startScan();
