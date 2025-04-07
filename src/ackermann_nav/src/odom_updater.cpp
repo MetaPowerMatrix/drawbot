@@ -343,55 +343,134 @@ void OdomUpdater::updateEncoderOnly(double v, double steering_angle, double dt,
 
 void OdomUpdater::updateWithIMUFusion(double v, double steering_angle, double dt,
                                      double& delta_x, double& delta_y, double& delta_th) {
-    // 使用IMU的角速度更新航向角
+    // 使用IMU的角速度更新航向角（更准确的角度数据来源）
     delta_th = angular_velocity_z_ * dt;
     
-    // 通过车轮编码器计算位移
-    double encoder_delta_x = v * cos(th_) * dt;
-    double encoder_delta_y = v * sin(th_) * dt;
+    // 通过改进的阿克曼几何模型计算位移
+    double encoder_delta_x = 0.0;
+    double encoder_delta_y = 0.0;
+    double encoder_delta_th = 0.0;
     
-    // 使用加速度的二次积分更新位置
-    double imu_delta_v_x = acceleration_x_ * dt;
-    double imu_delta_v_y = acceleration_y_ * dt;
-    double imu_delta_x = velocity_x_ * dt + 0.5 * acceleration_x_ * dt * dt;
-    double imu_delta_y = velocity_y_ * dt + 0.5 * acceleration_y_ * dt * dt;
+    // 调用编码器方法计算位移估计值
+    updateEncoderOnly(v, steering_angle, dt, encoder_delta_x, encoder_delta_y, encoder_delta_th);
     
-    // 更新速度
-    velocity_x_ += imu_delta_v_x;
-    velocity_y_ += imu_delta_v_y;
+    // 使用加速度的二次积分更新位置（考虑全局坐标系）
+    // 加速度需要从IMU坐标系转换到全局坐标系
+    double world_accel_x = acceleration_x_ * cos(th_) - acceleration_y_ * sin(th_);
+    double world_accel_y = acceleration_x_ * sin(th_) + acceleration_y_ * cos(th_);
     
-    // 简单低通滤波减少漂移
-    velocity_x_ *= 0.95;
-    velocity_y_ *= 0.95;
+    // 计算IMU估计的位移和速度变化
+    double imu_delta_v_x = world_accel_x * dt;
+    double imu_delta_v_y = world_accel_y * dt;
+    double imu_delta_x = velocity_x_ * dt + 0.5 * world_accel_x * dt * dt;
+    double imu_delta_y = velocity_y_ * dt + 0.5 * world_accel_y * dt * dt;
     
-    // 使用互补滤波融合位置数据
+    // 更新世界坐标系下的速度
+    double encoder_velocity_x = v * cos(th_);
+    double encoder_velocity_y = v * sin(th_);
+    
+    // 使用互补滤波融合速度估计值
+    velocity_x_ = fusion_alpha_ * encoder_velocity_x + (1 - fusion_alpha_) * (velocity_x_ + imu_delta_v_x);
+    velocity_y_ = fusion_alpha_ * encoder_velocity_y + (1 - fusion_alpha_) * (velocity_y_ + imu_delta_v_y);
+    
+    // 应用低通滤波减少漂移
+    velocity_x_ *= 0.98;
+    velocity_y_ *= 0.98;
+    
+    // 使用互补滤波融合位置变化数据
     delta_x = fusion_alpha_ * encoder_delta_x + (1 - fusion_alpha_) * imu_delta_x;
     delta_y = fusion_alpha_ * encoder_delta_y + (1 - fusion_alpha_) * imu_delta_y;
     
-    // 融合角速度数据
-    double encoder_delta_th = v * tan(steering_angle) / wheelbase_ * dt;
+    // 融合角速度数据（IMU的角速度与编码器估计值）
     delta_th = fusion_alpha_ * encoder_delta_th + (1 - fusion_alpha_) * delta_th;
     
-    ROS_DEBUG("IMU fusion update: v=%.3f, accel=(%.3f,%.3f), ang_vel=%.3f",
-             v, acceleration_x_, acceleration_y_, angular_velocity_z_);
+    // 更新角速度
+    angular_velocity_z_ = delta_th / dt;
+    
+    ROS_DEBUG("IMU融合更新: v=%.3f, 加速度=(%.3f,%.3f), 角速度=%.3f, 位移=(%.3f,%.3f), 角度变化=%.3f°",
+             v, world_accel_x, world_accel_y, angular_velocity_z_, delta_x, delta_y, delta_th * 180.0 / M_PI);
 }
 
 void OdomUpdater::updateWithControllerData(double dt,
                                          double& delta_x, double& delta_y, double& delta_th) {
     // 使用控制器上报的速度直接更新位置
     
-    // 计算在世界坐标系下的速度
-    velocity_x_ = controller_linear_x_ * cos(th_) - controller_linear_y_ * sin(th_);
-    velocity_y_ = controller_linear_x_ * sin(th_) + controller_linear_y_ * cos(th_);
+    // 如果速度为零，避免进行不必要的计算
+    if (fabs(controller_linear_x_) < 0.001 && 
+        fabs(controller_linear_y_) < 0.001 && 
+        fabs(controller_angular_z_) < 0.001) {
+        delta_x = 0.0;
+        delta_y = 0.0;
+        delta_th = 0.0;
+        velocity_x_ = 0.0;
+        velocity_y_ = 0.0;
+        angular_velocity_z_ = 0.0;
+        return;
+    }
+    
+    // 计算角度变化
+    delta_th = controller_angular_z_ * dt;
+    
+    // 处理角度变化很小的情况
+    if (fabs(delta_th) < 0.001) {
+        // 近似为直线运动，从车身坐标系转换到世界坐标系
+        double vx_global = controller_linear_x_ * cos(th_) - controller_linear_y_ * sin(th_);
+        double vy_global = controller_linear_x_ * sin(th_) + controller_linear_y_ * cos(th_);
+        
+        // 计算位移增量
+        delta_x = vx_global * dt;
+        delta_y = vy_global * dt;
+        
+        // 更新全局速度
+        velocity_x_ = vx_global;
+        velocity_y_ = vy_global;
+    } else {
+        // 圆弧运动 - 使用更准确的圆弧积分模型
+        
+        // 计算转弯半径和中心
+        double vx = controller_linear_x_;
+        double vy = controller_linear_y_;
+        double omega = controller_angular_z_;
+        
+        // 计算车辆速度大小
+        double v = sqrt(vx*vx + vy*vy);
+        
+        // 计算瞬时旋转半径
+        double R = v / fabs(omega);
+        
+        // 计算旋转中心相对于车辆的位置
+        double ICR_x = -vy / omega;  // 瞬时旋转中心x坐标
+        double ICR_y = vx / omega;   // 瞬时旋转中心y坐标
+        
+        // 计算旋转中心在全局坐标系中的坐标
+        double ICR_global_x = x_ + ICR_x * cos(th_) - ICR_y * sin(th_);
+        double ICR_global_y = y_ + ICR_x * sin(th_) + ICR_y * cos(th_);
+        
+        // 计算旋转前后的角度
+        double theta_start = th_;
+        double theta_end = th_ + delta_th;
+        
+        // 计算位移增量（基于圆弧运动）
+        double x_start = ICR_global_x + R * sin(theta_start - M_PI/2 * (omega > 0 ? 1 : -1));
+        double y_start = ICR_global_y + R * cos(theta_start - M_PI/2 * (omega > 0 ? 1 : -1));
+        
+        double x_end = ICR_global_x + R * sin(theta_end - M_PI/2 * (omega > 0 ? 1 : -1));
+        double y_end = ICR_global_y + R * cos(theta_end - M_PI/2 * (omega > 0 ? 1 : -1));
+        
+        delta_x = x_end - x_start;
+        delta_y = y_end - y_start;
+        
+        // 计算全局速度
+        velocity_x_ = delta_x / dt;
+        velocity_y_ = delta_y / dt;
+    }
+    
+    // 更新角速度
     angular_velocity_z_ = controller_angular_z_;
     
-    // 计算位移增量
-    delta_x = velocity_x_ * dt;
-    delta_y = velocity_y_ * dt;
-    delta_th = angular_velocity_z_ * dt;
-    
-    ROS_DEBUG("Controller data update: v_x=%.3f, v_y=%.3f, omega=%.3f, dt=%.3f",
-            controller_linear_x_, controller_linear_y_, controller_angular_z_, dt);
+    ROS_DEBUG("控制器数据更新: v_x=%.3f, v_y=%.3f, omega=%.3f, dt=%.3f, 位移=(%.3f,%.3f), 角度变化=%.3f°",
+            controller_linear_x_, controller_linear_y_, controller_angular_z_, dt, 
+            delta_x, delta_y, delta_th * 180.0 / M_PI);
 }
 
 bool OdomUpdater::parseUplinkFrame(const std::vector<uint8_t>& data) {
