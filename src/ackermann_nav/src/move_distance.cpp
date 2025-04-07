@@ -12,16 +12,17 @@ class ArmController {
 private:
     std::ofstream serial_port;
     bool is_connected;
+    std::string port_name;
 
 public:
-    ArmController() : is_connected(false) {
+    ArmController(const std::string& port = "/dev/ttyUSB1") : is_connected(false), port_name(port) {
         // 尝试打开串口
-        serial_port.open("/dev/ttyUSB1");
+        serial_port.open(port_name);
         if (serial_port.is_open()) {
             is_connected = true;
-            ROS_INFO("Arm controller connected to /dev/ttyUSB1");
+            ROS_INFO("Arm controller connected to %s", port_name.c_str());
         } else {
-            ROS_WARN("Failed to open /dev/ttyUSB1 for arm control");
+            ROS_WARN("Failed to open %s for arm control", port_name.c_str());
         }
     }
 
