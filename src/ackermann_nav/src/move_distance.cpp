@@ -310,47 +310,67 @@ public:
         geometry_msgs::Twist cmd_vel;
         
         if (rotating) {
-            // 转向阶段保持不变
-            cmd_vel.linear.x = linear_speed_;
-            // cmd_vel.linear.x = 0.2;
+            // 转向阶段，小速度前进并转向
+            cmd_vel.linear.x = 0.05; // 使用非常小的线速度辅助转向
             cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
+            
+            ROS_DEBUG("转向阶段: 角度误差=%.2f, 角速度=%.2f", angle_error, cmd_vel.angular.z);
         } 
         else if (use_curve_motion_) {
             // 曲线运动模式
             cmd_vel.linear.x = linear_speed_;
             
-            // 计算当前位置到目标点的向量
-            double dx = target_x_ - (current_x_ - start_x_);
-            double dy = target_y_ - (current_y_ - start_y_);
+            // 计算当前位置到目标点的向量（全局坐标系下）
+            double dx = start_x_ + target_x_ - current_x_;
+            double dy = start_y_ + target_y_ - current_y_;
             double distance_to_goal = std::sqrt(dx*dx + dy*dy);
             
-            // 计算期望航向角
+            // 计算期望朝向角（全局坐标系下）
             double desired_heading = std::atan2(dy, dx);
+            
+            // 计算朝向误差
             double heading_error = normalizeAngle(desired_heading - current_th_);
             
-            // 根据路径曲率和当前误差计算转向角速度
-            double base_angular_velocity = linear_speed_ * path_curvature_;
-            double correction = 0.5 * heading_error;  // 比例控制修正
-            cmd_vel.angular.z = base_angular_velocity + correction;
+            // PID控制：使用路径曲率和当前误差计算角速度
+            // P项：当前误差
+            double kp = 0.8;
+            double error_term = kp * heading_error;
             
-            // 限制角速度
+            // 基础项：根据指定曲率计算的角速度
+            double base_angular_velocity = linear_speed_ * path_curvature_;
+            
+            // 合并控制输出
+            cmd_vel.angular.z = base_angular_velocity + error_term;
+            
+            // 限制角速度，避免转向过急
             cmd_vel.angular.z = std::max(-0.5, std::min(0.5, cmd_vel.angular.z));
             
-            ROS_DEBUG("Curve motion: distance=%.2f, heading_error=%.2f, angular_velocity=%.2f", 
+            ROS_DEBUG("曲线运动: 距离=%.2f, 朝向误差=%.2f, 角速度=%.2f", 
                     distance_to_goal, heading_error, cmd_vel.angular.z);
         }
         else {
-            // 直线运动模式保持不变
+            // 直线运动模式
             double heading_error;
             if (linear_speed_ < 0) {
+                // 后退模式，保持直线
                 heading_error = 0;
+                cmd_vel.linear.x = linear_speed_;
+                cmd_vel.angular.z = 0.0;
             } else {
-                heading_error = target_angle_ - (current_th_ - start_th_);
-                heading_error = normalizeAngle(heading_error);
+                // 前进模式，需要保持与目标角度对齐
+                // 计算当前朝向与目标角度的差异
+                heading_error = normalizeAngle(target_angle_ - (current_th_ - start_th_));
+                
+                // 使用比例控制调整角速度
+                cmd_vel.linear.x = linear_speed_;
+                cmd_vel.angular.z = 0.3 * heading_error;
+                
+                // 限制角速度
+                cmd_vel.angular.z = std::max(-0.3, std::min(0.3, cmd_vel.angular.z));
             }
             
-            cmd_vel.linear.x = linear_speed_;
-            cmd_vel.angular.z = 0.3 * heading_error;
+            ROS_DEBUG("直线运动: 朝向误差=%.2f, 线速度=%.2f, 角速度=%.2f", 
+                    heading_error, cmd_vel.linear.x, cmd_vel.angular.z);
         }
         
         cmd_vel_pub_.publish(cmd_vel);
