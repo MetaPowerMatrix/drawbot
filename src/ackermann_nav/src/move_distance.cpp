@@ -96,6 +96,24 @@ private:
     ros::Time collision_time_; // 碰撞检测时间
     int avoidance_phase_;     // 避障阶段：0=后退, 1=转向, 2=继续前进
     
+    // 添加Ackerman参数
+    double wheelbase_;  // 前后轮轴距
+    double max_steering_angle_;  // 最大转向角
+    
+    // 计算Ackerman转向角速度
+    double calculateAckermanSteering(double linear_vel, double desired_curvature) {
+        if (fabs(linear_vel) < 0.01) return 0.0;
+        
+        // 计算转向角 (δ = atan(L * κ))
+        double steering_angle = atan(wheelbase_ * desired_curvature);
+        
+        // 限制转向角
+        steering_angle = std::max(-max_steering_angle_, 
+                                 std::min(max_steering_angle_, steering_angle));
+        
+        // 计算等效的角速度 (ω = v * κ)
+        return linear_vel * tan(steering_angle) / wheelbase_;
+    }
 public:
     MoveDistance(const std::string& arm_port = "/dev/ttyUSB1") : 
         arm_controller(arm_port),
@@ -117,7 +135,9 @@ public:
         target_angle_ = 0.0;
         linear_speed_ = 0.2;  // 默认线速度
         angular_speed_ = 0.5; // 默认角速度
-        
+        wheelbase_(0.15),  // 根据实际小车设置
+        max_steering_angle_(0.6) {  // 约35度
+
         // 创建发布者和订阅者
         cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         odom_sub_ = nh_.subscribe("odom", 10, &MoveDistance::odomCallback, this);
@@ -187,80 +207,39 @@ public:
     }
     
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
-        // 检查里程计消息的有效性
-        if (!msg) {
-            ROS_WARN("Received empty odom message");
-            return;
-        }
-
-        // 更新当前位置信息
+        // 更新当前位置和朝向
         current_x_ = msg->pose.pose.position.x;
         current_y_ = msg->pose.pose.position.y;
         current_th_ = tf::getYaw(msg->pose.pose.orientation);
-
-        // 如果正在避障，处理避障逻辑
-        if (avoiding_) {
-            handleAvoidance();
-            return;
-        }
-
+        
         if (!movement_started_) {
-            // 记录起始位置和朝向
             start_x_ = current_x_;
             start_y_ = current_y_;
             start_th_ = current_th_;
             movement_started_ = true;
-            ROS_INFO("Starting movement, initial position: (%.2f, %.2f), heading: %.2f", start_x_, start_y_, start_th_);
+            return;
         }
         
-        // 计算与目标角度的差值（考虑初始朝向）
-        double target_relative_angle = std::atan2(target_y_, target_x_);
-        double target_absolute_angle = start_th_ + target_relative_angle;
-        double angle_diff = current_th_ - target_absolute_angle;
-
-        // 标准化角度差到[-pi, pi]
-        angle_diff = fmod(angle_diff + M_PI, 2*M_PI) - M_PI;
-
-        if (angle_first_ && !angle_finished_) {
-            ROS_DEBUG("Current angle error: %.2f rad", angle_diff);
-            
-            // 带小速度转向阶段
-            if (fabs(angle_diff) < 0.05) {
-                angle_finished_ = true;
-                // 重置起始位置和朝向
-                start_x_ = current_x_;
-                start_y_ = current_y_;
-                start_th_ = current_th_;
-                ROS_INFO("Rotation completed, new start position: (%.2f, %.2f)", start_x_, start_y_);
-            } else {
-                // 带小线速度转向（0.1 m/s）
-                move(true, angle_diff);
-                return;
-            }
-        }
+        // 计算在局部坐标系中的移动
+        double delta_x = (current_x_ - start_x_) * cos(start_th_) + (current_y_ - start_y_) * sin(start_th_);
+        double delta_y = -(current_x_ - start_x_) * sin(start_th_) + (current_y_ - start_y_) * cos(start_th_);
         
-        // 计算已移动的距离
-        double dx = current_x_ - start_x_;
-        double dy = current_y_ - start_y_;
-        double distance_moved = std::sqrt(dx*dx + dy*dy);
+        // 计算距离和角度误差
+        double distance_error = target_distance_ - sqrt(delta_x*delta_x + delta_y*delta_y);
+        double angle_error = atan2(target_y_, target_x_) - atan2(delta_y, delta_x);
         
-        // 输出调试信息
-        ROS_DEBUG("Current position: (%.2f, %.2f), distance moved: %.2f meters",
-                 current_x_,
-                 current_y_,
-                 distance_moved);
+        // 标准化角度误差
+        angle_error = fmod(angle_error + M_PI, 2*M_PI) - M_PI;
         
-        // 检查是否达到目标距离
-        if (distance_moved >= target_distance_) {
+        // 检查是否到达目标
+        if (fabs(distance_error) < 0.05 && fabs(angle_error) < 0.05) {
             stop();
             goal_reached_ = true;
-            ROS_INFO("Movement completed: %.2f meters", distance_moved);
-        } else if (!goal_reached_) {
-            // 继续移动
-            move(false, angle_diff);
-            ROS_DEBUG("Continuing movement, target: %.2f meters, current: %.2f meters",
-                     target_distance_, distance_moved);
+            return;
         }
+        
+        // 根据误差计算控制命令
+        move(distance_error, angle_error);
     }
     
     // 处理避障逻辑
@@ -300,82 +279,149 @@ public:
             }
         }
     }
-    
-    void move(bool rotating, double angle_error, double speed_factor=1.0) {
-        // 如果检测到碰撞，不执行正常的移动
-        if (collision_detected_) {
-            return;
-        }
+
+    void move(double distance_error, double angle_error) {
+        static ros::Time last_time = ros::Time::now();
+        ros::Time current_time = ros::Time::now();
+        double dt = (current_time - last_time).toSec();
+        last_time = current_time;
         
+        // 安全检查：确保时间间隔合理
+        if (dt <= 0 || dt > 0.1) {
+            dt = 0.05;  // 默认50ms
+        }
+
+        // PID参数
+        const double kp_distance = 0.8;   // 距离比例系数
+        const double ki_distance = 0.01;  // 距离积分系数
+        const double kd_distance = 0.1;   // 距离微分系数
+        
+        const double kp_angle = 1.2;      // 角度比例系数
+        const double ki_angle = 0.02;     // 角度积分系数
+        const double kd_angle = 0.15;     // 角度微分系数
+        
+        // 限制最大速度和加速度
+        const double max_linear_vel = 0.5;     // m/s
+        const double max_angular_vel = 0.8;    // rad/s
+        const double max_linear_accel = 0.3;   // m/s^2
+        const double max_angular_accel = 1.0;  // rad/s^2
+
+        // ====== 1. 距离控制 ======
+        // 更新PID项
+        static double last_distance_error = 0;
+        static double integral_distance = 0;
+        
+        // 比例项
+        double p_distance = kp_distance * distance_error;
+        
+        // 积分项（带抗饱和）
+        integral_distance += ki_distance * distance_error * dt;
+        integral_distance = std::max(-1.0, std::min(1.0, integral_distance));
+        
+        // 微分项
+        double d_distance = kd_distance * (distance_error - last_distance_error) / dt;
+        last_distance_error = distance_error;
+        
+        // 计算期望线速度
+        double desired_linear_vel = p_distance + integral_distance + d_distance;
+        desired_linear_vel = std::max(-max_linear_vel, std::min(max_linear_vel, desired_linear_vel));
+
+        // ====== 2. 角度控制 ======
+        // 更新PID项
+        static double last_angle_error = 0;
+        static double integral_angle = 0;
+        
+        // 比例项
+        double p_angle = kp_angle * angle_error;
+        
+        // 积分项（带抗饱和）
+        integral_angle += ki_angle * angle_error * dt;
+        integral_angle = std::max(-0.5, std::min(0.5, integral_angle));
+        
+        // 微分项
+        double d_angle = kd_angle * (angle_error - last_angle_error) / dt;
+        last_angle_error = angle_error;
+        
+        // 计算期望曲率 (Ackerman转向模型)
+        double desired_curvature = (p_angle + integral_angle + d_angle) / (target_distance_ + 0.1);
+        
+        // ====== 3. Ackerman转向计算 ======
         geometry_msgs::Twist cmd_vel;
         
-        if (rotating) {
-            // 转向阶段，小速度前进并转向
-            cmd_vel.linear.x = 0.05; // 使用非常小的线速度辅助转向
-            cmd_vel.angular.z = (angle_error < 0 ? 1 : -1) * angular_speed_ * speed_factor;
-            
-            ROS_DEBUG("转向阶段: 角度误差=%.2f, 角速度=%.2f", angle_error, cmd_vel.angular.z);
-        } 
-        else if (use_curve_motion_) {
-            // 曲线运动模式
-            cmd_vel.linear.x = linear_speed_;
-            
-            // 计算当前位置到目标点的向量（全局坐标系下）
-            double dx = start_x_ + target_x_ - current_x_;
-            double dy = start_y_ + target_y_ - current_y_;
-            double distance_to_goal = std::sqrt(dx*dx + dy*dy);
-            
-            // 计算期望朝向角（全局坐标系下）
-            double desired_heading = std::atan2(dy, dx);
-            
-            // 计算朝向误差
-            double heading_error = normalizeAngle(desired_heading - current_th_);
-            
-            // PID控制：使用路径曲率和当前误差计算角速度
-            // P项：当前误差
-            double kp = 0.8;
-            double error_term = kp * heading_error;
-            
-            // 基础项：根据指定曲率计算的角速度
-            double base_angular_velocity = linear_speed_ * path_curvature_;
-            
-            // 合并控制输出
-            cmd_vel.angular.z = base_angular_velocity + error_term;
-            
-            // 限制角速度，避免转向过急
-            cmd_vel.angular.z = std::max(-0.5, std::min(0.5, cmd_vel.angular.z));
-            
-            ROS_DEBUG("曲线运动: 距离=%.2f, 朝向误差=%.2f, 角速度=%.2f", 
-                    distance_to_goal, heading_error, cmd_vel.angular.z);
-        }
-        else {
-            // 直线运动模式
-            double heading_error;
-            if (linear_speed_ < 0) {
-                // 后退模式，保持直线
-                heading_error = 0;
-                cmd_vel.linear.x = linear_speed_;
-                cmd_vel.angular.z = 0.0;
-            } else {
-                // 前进模式，需要保持与目标角度对齐
-                // 计算当前朝向与目标角度的差异
-                heading_error = normalizeAngle(target_angle_ - (current_th_ - start_th_));
-                
-                // 使用比例控制调整角速度
-                cmd_vel.linear.x = linear_speed_;
-                cmd_vel.angular.z = 0.3 * heading_error;
-                
-                // 限制角速度
-                cmd_vel.angular.z = std::max(-0.3, std::min(0.3, cmd_vel.angular.z));
-            }
-            
-            ROS_DEBUG("直线运动: 朝向误差=%.2f, 线速度=%.2f, 角速度=%.2f", 
-                    heading_error, cmd_vel.linear.x, cmd_vel.angular.z);
+        // 计算最终线速度（考虑加速度限制）
+        static double last_linear_vel = 0;
+        double linear_accel = (desired_linear_vel - last_linear_vel) / dt;
+        linear_accel = std::max(-max_linear_accel, std::min(max_linear_accel, linear_accel));
+        cmd_vel.linear.x = last_linear_vel + linear_accel * dt;
+        last_linear_vel = cmd_vel.linear.x;
+        
+        // 计算角速度 (ω = v * κ / (1 + L*κ^2)) - 考虑转向动力学
+        if (fabs(cmd_vel.linear.x) > 0.05) {  // 只有有足够速度时才转向
+            double effective_curvature = desired_curvature / (1 + wheelbase_ * desired_curvature * desired_curvature);
+            cmd_vel.angular.z = cmd_vel.linear.x * tan(atan(wheelbase_ * effective_curvature)) / wheelbase_;
+        } else {
+            // 低速时使用简化转向模型
+            cmd_vel.angular.z = 0.5 * (p_angle + integral_angle + d_angle);
         }
         
+        // 限制角速度和角加速度
+        static double last_angular_vel = 0;
+        double angular_accel = (cmd_vel.angular.z - last_angular_vel) / dt;
+        angular_accel = std::max(-max_angular_accel, std::min(max_angular_accel, angular_accel));
+        cmd_vel.angular.z = last_angular_vel + angular_accel * dt;
+        cmd_vel.angular.z = std::max(-max_angular_vel, std::min(max_angular_vel, cmd_vel.angular.z));
+        last_angular_vel = cmd_vel.angular.z;
+        
+        // ====== 4. 特殊情况处理 ======
+        // 接近目标时的减速处理
+        double slow_down_dist = 0.5;  // 开始减速的距离
+        if (fabs(distance_error) < slow_down_dist) {
+            double speed_factor = fabs(distance_error) / slow_down_dist;
+            cmd_vel.linear.x *= std::max(0.1, speed_factor);
+            cmd_vel.angular.z *= std::max(0.1, speed_factor);
+        }
+        
+        // ====== 5. 发布控制命令 ======
         cmd_vel_pub_.publish(cmd_vel);
+        
+        // 调试输出
+        ROS_DEBUG_THROTTLE(0.5, 
+            "Move Control: "
+            "LinVel=%.2f(desired %.2f) "
+            "AngVel=%.2f(κ=%.3f) "
+            "DistErr=%.2f AngErr=%.1f°",
+            cmd_vel.linear.x, desired_linear_vel,
+            cmd_vel.angular.z, desired_curvature,
+            distance_error, angle_error * 180.0/M_PI);
     }
-    
+    // void move(double distance_error, double angle_error) {
+    //     geometry_msgs::Twist cmd_vel;
+        
+    //     // 使用PID控制器计算速度和转向
+    //     double kp_distance = 0.5;  // 距离比例系数
+    //     double kp_angle = 1.0;     // 角度比例系数
+        
+    //     // 基本线速度 - 根据距离误差调整
+    //     cmd_vel.linear.x = kp_distance * distance_error;
+        
+    //     // 限制最大速度
+    //     cmd_vel.linear.x = std::max(-0.3, std::min(0.3, cmd_vel.linear.x));
+        
+    //     // Ackerman转向模型 - 根据角度误差和线速度计算转向角速度
+    //     if (fabs(cmd_vel.linear.x) > 0.01) {  // 只有有前进速度时才转向
+    //         // 计算期望的转向半径: R = v / ω
+    //         // 我们希望转向半径与角度误差成反比
+    //         double desired_omega = kp_angle * angle_error * cmd_vel.linear.x;
+            
+    //         // 限制最大转向角速度
+    //         cmd_vel.angular.z = std::max(-0.5, std::min(0.5, desired_omega));
+    //     } else {
+    //         // 如果几乎没有前进速度，原地转向
+    //         cmd_vel.angular.z = kp_angle * angle_error;
+    //     }
+        
+    //     cmd_vel_pub_.publish(cmd_vel);
+    // }
     void stop() {
         geometry_msgs::Twist cmd_vel;
         cmd_vel.linear.x = 0.0;
