@@ -144,13 +144,13 @@ public:
         // 订阅碰撞警告消息
         collision_sub_ = nh_.subscribe("collision_warning", 10, &MoveDistance::collisionCallback, this);
         
-        ROS_INFO("MoveDistance初始化完成，已订阅collision_warning消息");
+        ROS_INFO("MoveDistance initialized, subscribed to collision_warning message");
     }
     
     // 添加碰撞回调函数
     void collisionCallback(const std_msgs::Bool::ConstPtr& msg) {
         if (msg->data && !collision_detected_ && !avoiding_) {
-            ROS_WARN("检测到碰撞警告！启动避障程序");
+            ROS_WARN("Collision warning detected! Starting obstacle avoidance program");
             collision_detected_ = true;
             collision_time_ = ros::Time::now();
             avoiding_ = true;
@@ -253,7 +253,7 @@ public:
                 cmd_vel.linear.x = -0.15;  // 低速后退
                 cmd_vel.angular.z = 0.0;
                 cmd_vel_pub_.publish(cmd_vel);
-                ROS_DEBUG("避障-后退阶段 (%.1f秒)", time_since_collision.toSec());
+                ROS_DEBUG("Obstacle avoidance - Backward phase (%.1f seconds)", time_since_collision.toSec());
             } else {
                 // 进入转向阶段
                 avoidance_phase_ = 1;
@@ -266,12 +266,12 @@ public:
                 cmd_vel.linear.x = 0.0;
                 cmd_vel.angular.z = -0.5;  // 右转
                 cmd_vel_pub_.publish(cmd_vel);
-                ROS_DEBUG("避障-转向阶段 (%.1f秒)", time_since_collision.toSec());
+                ROS_DEBUG("Obstacle avoidance - Turning phase (%.1f seconds)", time_since_collision.toSec());
             } else {
                 // 避障完成，恢复正常导航
                 avoiding_ = false;
                 collision_detected_ = false;
-                ROS_INFO("避障完成，恢复正常导航");
+                ROS_INFO("Obstacle avoidance completed, resuming normal navigation");
                 
                 // 重置导航状态
                 reset();
@@ -393,34 +393,7 @@ public:
             cmd_vel.angular.z, desired_curvature,
             distance_error, angle_error * 180.0/M_PI);
     }
-    // void move(double distance_error, double angle_error) {
-    //     geometry_msgs::Twist cmd_vel;
-        
-    //     // 使用PID控制器计算速度和转向
-    //     double kp_distance = 0.5;  // 距离比例系数
-    //     double kp_angle = 1.0;     // 角度比例系数
-        
-    //     // 基本线速度 - 根据距离误差调整
-    //     cmd_vel.linear.x = kp_distance * distance_error;
-        
-    //     // 限制最大速度
-    //     cmd_vel.linear.x = std::max(-0.3, std::min(0.3, cmd_vel.linear.x));
-        
-    //     // Ackerman转向模型 - 根据角度误差和线速度计算转向角速度
-    //     if (fabs(cmd_vel.linear.x) > 0.01) {  // 只有有前进速度时才转向
-    //         // 计算期望的转向半径: R = v / ω
-    //         // 我们希望转向半径与角度误差成反比
-    //         double desired_omega = kp_angle * angle_error * cmd_vel.linear.x;
-            
-    //         // 限制最大转向角速度
-    //         cmd_vel.angular.z = std::max(-0.5, std::min(0.5, desired_omega));
-    //     } else {
-    //         // 如果几乎没有前进速度，原地转向
-    //         cmd_vel.angular.z = kp_angle * angle_error;
-    //     }
-        
-    //     cmd_vel_pub_.publish(cmd_vel);
-    // }
+
     void stop() {
         geometry_msgs::Twist cmd_vel;
         cmd_vel.linear.x = 0.0;
@@ -565,15 +538,15 @@ int main(int argc, char** argv) {
     // 如果指定了串口设备名，则使用指定的设备名
     if (argc > 2) {
         arm_port = argv[2];
-        ROS_INFO("使用指定的机械臂串口设备: %s", arm_port.c_str());
+        ROS_INFO("Using specified arm serial port: %s", arm_port.c_str());
     } else {
-        ROS_INFO("使用默认机械臂串口设备: %s", arm_port.c_str());
+        ROS_INFO("Using default arm serial port: %s", arm_port.c_str());
     }
     
     // 解析路由文件
     std::vector<TargetPoint> targets = parseRouteFile(route_file);
     if (targets.empty()) {
-        ROS_ERROR("路由文件中未找到有效的目标点");
+        ROS_ERROR("No valid target points found in the route file");
         return 1;
     }
     
@@ -586,7 +559,7 @@ int main(int argc, char** argv) {
     // 按顺序处理每个目标点
     for (size_t i = 0; i < targets.size(); ++i) {
         const auto& target = targets[i];
-        ROS_INFO("移动到目标点 %lu: (%.2f, %.2f), 朝向=%.2f°, 曲率=%.2f", 
+        ROS_INFO("Arrive at point %lu: (%.2f, %.2f), heading=%.2f°, curvature=%.2f", 
                 i+1, target.x, target.y, target.heading * 180.0 / M_PI, target.curvature);
         
         // 根据draw属性控制机械臂
@@ -608,6 +581,6 @@ int main(int argc, char** argv) {
         }
     }
     
-    ROS_INFO("所有目标点已到达");
+    ROS_INFO("All target points have been reached");
     return 0;
 }
