@@ -115,7 +115,7 @@ private:
         return linear_vel * tan(steering_angle) / wheelbase_;
     }
 public:
-    MoveDistance(const std::string& arm_port = "/dev/ttyUSB1") : 
+    MoveDistance(const std::string& arm_port = "/dev/ttyUSB0") : 
         arm_controller(arm_port),
         target_x_(0.0), 
         target_y_(0.0),
