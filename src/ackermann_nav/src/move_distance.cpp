@@ -130,11 +130,10 @@ public:
         collision_detected_(false),
         avoiding_(false),
         avoidance_phase_(0),
-        // 默认参数设置
-        target_distance_ = 0.0,
-        target_angle_ = 0.0,
-        linear_speed_ = 0.2,  // 默认线速度
-        angular_speed_ = 0.5, // 默认角速度
+        target_distance_(0.0),
+        target_angle_(0.0),
+        linear_speed_(0.2),  // 默认线速度
+        angular_speed_(0.5), // 默认角速度
         wheelbase_(0.15),  // 根据实际小车设置
         max_steering_angle_(0.6) {  // 约35度
 
